@@ -1,4 +1,4 @@
-name: Windows RDP
+name: High-Speed Windows RDP
 
 on:
   workflow_dispatch:
@@ -14,17 +14,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install & Connect Tailscale
-      shell: powershell
-      run: |
-        choco install tailscale -y
-        $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
-        if (-not (Test-Path $tailscaleExe)) {
-            $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-        }
-        & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
-
-    - name: Enable Remote Desktop & Set Password
+    - name: Enable RDP & Start High-Speed Tunnel
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
@@ -46,24 +36,48 @@ jobs:
             net localgroup Administrators $Username /add
         }
 
-        $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
-        if (-not (Test-Path $tailscaleExe)) {
-            $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-        }
-        $TsIp = (& $tailscaleExe ip -4).Trim()
+        # Install cloudflared for global edge speed
+        choco install cloudflared -y
 
-        $InfoBlock = "RDP_INFO_START`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
+        $cfJob = Start-Job -ScriptBlock {
+            cloudflared tunnel --url tcp://localhost:3389
+        }
+
+        $cfUrl = ""
+        for ($i=1; $i -le 25; $i++) {
+            Start-Sleep -Seconds 2
+            $output = Receive-Job -Job $cfJob -Keep | Out-String
+            if ($output -match "tcp://[a-zA-Z0-9\.-]+:([0-9]+)") {
+                $cfUrl = $matches[0]
+                break
+            }
+        }
+
+        # Backup: Install Tailscale
+        try {
+            choco install tailscale -y
+            $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
+            if (-not (Test-Path $tailscaleExe)) {
+                $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
+            }
+            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
+            $TsIp = (& $tailscaleExe ip -4).Trim()
+        } catch {
+            $TsIp = "Tailscale Offline"
+        }
+
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
 
         Write-Host "========================================"
         Write-Host $InfoBlock
         Write-Host "========================================"
 
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### RDP Connection Details`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
         } catch {
-            Write-Host "Failed to post commit comment."
+            Write-Host "Failed to post comment."
         }
 
     - name: Keep Alive Loop
@@ -79,9 +93,7 @@ jobs:
       if: always()
       shell: powershell
       run: |
-        Write-Host "Cleaning up Tailscale device node..."
         $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
-        if (-not (Test-Path $tailscaleExe)) {
-            $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
+        if (Test-Path $tailscaleExe) {
+            & $tailscaleExe logout
         }
-        & $tailscaleExe logout
