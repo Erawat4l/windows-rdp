@@ -1,0 +1,57 @@
+name: Windows RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Connect to Tailscale
+      uses: tailscale/github-action@v2
+      with:
+        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+    - name: Enable Remote Desktop & Set Password
+      shell: powershell
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+        $PasswordChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
+        $Password = -join ((1..16) | ForEach-Object { $PasswordChars[(Get-Random -Maximum $PasswordChars.Length)] })
+
+        $Username = "runneradmin"
+        $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
+        
+        try {
+            Set-LocalUser -Name $Username -Password $SecPassword
+        } catch {
+            net user $Username $Password /add
+            net localgroup Administrators $Username /add
+        }
+
+        $TsIp = (tailscale ip -4).Trim()
+
+        Write-Host "========================================"
+        Write-Host "RDP_INFO_START"
+        Write-Host "TAILSCALE_IP: $TsIp"
+        Write-Host "USERNAME: $Username"
+        Write-Host "PASSWORD: $Password"
+        Write-Host "PORT: 3389"
+        Write-Host "RDP_INFO_END"
+        Write-Host "========================================"
+
+    - name: Keep Alive Loop
+      shell: powershell
+      run: |
+        Write-Host "RDP session active. Keeping workflow alive for 6 hours..."
+        for ($i=1; $i -le 360; $i++) {
+            Start-Sleep -Seconds 60
+            Write-Host "RDP session active ($i / 360 minutes)..."
+        }
