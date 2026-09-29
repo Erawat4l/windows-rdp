@@ -14,7 +14,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Enable RDP & Start High-Speed Tunnel
+    - name: Enable RDP & Set Fixed Password
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
@@ -25,9 +25,8 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-        $PasswordChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
-        $Password = -join ((1..16) | ForEach-Object { $PasswordChars[(Get-Random -Maximum $PasswordChars.Length)] })
-
+        # Fixed Password
+        $Password = "EraRdp#2026!Win"
         $Username = "runneradmin"
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
         
@@ -56,7 +55,7 @@ jobs:
             }
         }
 
-        # Backup: Install Tailscale
+        # Connect Tailscale
         try {
             choco install tailscale -y
             $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
