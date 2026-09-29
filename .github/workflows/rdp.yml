@@ -6,7 +6,6 @@ on:
 permissions:
   contents: write
   actions: write
-  variables: write
 
 jobs:
   rdp:
@@ -66,7 +65,7 @@ jobs:
             gh variable set RDP_PASSWORD --body "$Password" --repo ${{ github.repository }}
             gh variable set RDP_PORT --body "3389" --repo ${{ github.repository }}
         } catch {
-            Write-Host "Failed to update gh variables, falling back to log echo only."
+            Write-Host "Variable update skipped."
         }
 
     - name: Keep Alive Loop
