@@ -25,12 +25,10 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-        # Fixed Alphanumeric Password for maximum compatibility
         $Password = "EraRdp2026WinPass"
         $Username = "runneradmin"
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
         
-        # Enforce password update on runneradmin and Administrator
         try {
             Set-LocalUser -Name $Username -Password $SecPassword
         } catch {}
@@ -39,23 +37,23 @@ jobs:
         net user $Username "$Password"
         net localgroup Administrators $Username /add
 
-        # Enable Administrator account as backup
         try {
             Set-LocalUser -Name "Administrator" -Password $SecPassword
             Enable-LocalUser -Name "Administrator"
         } catch {}
         net user Administrator "$Password" /active:yes
 
-        # Install cloudflared for global edge speed
-        choco install cloudflared -y
+        # Download cloudflared.exe directly for speed
+        Write-Host "📦 Installing Cloudflare Tunnel..."
+        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "C:\Windows\cloudflared.exe"
 
         $cfJob = Start-Job -ScriptBlock {
             $ErrorActionPreference = "SilentlyContinue"
-            cloudflared tunnel --url tcp://localhost:3389
+            cloudflared.exe tunnel --url tcp://localhost:3389
         }
 
         $cfUrl = ""
-        for ($i=1; $i -le 30; $i++) {
+        for ($i=1; $i -le 20; $i++) {
             Start-Sleep -Seconds 2
             $output = Receive-Job -Job $cfJob -ErrorAction SilentlyContinue | Out-String
             if ($output -match "tcp://[a-zA-Z0-9\.-]+:([0-9]+)") {
@@ -64,14 +62,17 @@ jobs:
             }
         }
 
-        # Connect Tailscale
+        # Install Tailscale directly via MSI
+        Write-Host "📦 Installing Tailscale..."
         try {
-            choco install tailscale -y
+            Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
+            Start-Process "$env:TEMP\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
             $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
             if (-not (Test-Path $tailscaleExe)) {
                 $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
             }
-            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
+            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="rdp-runner"
+            Start-Sleep -Seconds 3
             $TsIp = (& $tailscaleExe ip -4).Trim()
         } catch {
             $TsIp = "Tailscale Offline"
@@ -87,9 +88,7 @@ jobs:
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
-        } catch {
-            Write-Host "Failed to post comment."
-        }
+        } catch {}
 
     - name: Keep Alive Loop
       shell: powershell
