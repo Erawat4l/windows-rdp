@@ -3,6 +3,11 @@ name: Windows RDP
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: write
+  variables: write
+
 jobs:
   rdp:
     runs-on: windows-latest
@@ -19,6 +24,8 @@ jobs:
         & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
 
     - name: Enable Remote Desktop & Set Password
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
@@ -52,6 +59,15 @@ jobs:
         Write-Host "PORT: 3389"
         Write-Host "RDP_INFO_END"
         Write-Host "========================================"
+
+        try {
+            gh variable set RDP_IP --body "$TsIp" --repo ${{ github.repository }}
+            gh variable set RDP_USER --body "$Username" --repo ${{ github.repository }}
+            gh variable set RDP_PASSWORD --body "$Password" --repo ${{ github.repository }}
+            gh variable set RDP_PORT --body "3389" --repo ${{ github.repository }}
+        } catch {
+            Write-Host "Failed to update gh variables, falling back to log echo only."
+        }
 
     - name: Keep Alive Loop
       shell: powershell
