@@ -19,6 +19,8 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
+        $ErrorActionPreference = "SilentlyContinue"
+
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -40,13 +42,14 @@ jobs:
         choco install cloudflared -y
 
         $cfJob = Start-Job -ScriptBlock {
+            $ErrorActionPreference = "SilentlyContinue"
             cloudflared tunnel --url tcp://localhost:3389
         }
 
         $cfUrl = ""
-        for ($i=1; $i -le 25; $i++) {
+        for ($i=1; $i -le 30; $i++) {
             Start-Sleep -Seconds 2
-            $output = Receive-Job -Job $cfJob -Keep | Out-String
+            $output = Receive-Job -Job $cfJob -ErrorAction SilentlyContinue | Out-String
             if ($output -match "tcp://[a-zA-Z0-9\.-]+:([0-9]+)") {
                 $cfUrl = $matches[0]
                 break
