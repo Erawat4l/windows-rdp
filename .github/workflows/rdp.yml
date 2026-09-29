@@ -56,7 +56,7 @@ jobs:
         for ($i=1; $i -le 20; $i++) {
             Start-Sleep -Seconds 2
             $output = Receive-Job -Job $cfJob -ErrorAction SilentlyContinue | Out-String
-            if ($output -match "tcp://[a-zA-Z0-9\.-]+:([0-9]+)") {
+            if ($output -match 'tcp://[a-zA-Z0-9\.-]+:([0-9]+)') {
                 $cfUrl = $matches[0]
                 break
             }
