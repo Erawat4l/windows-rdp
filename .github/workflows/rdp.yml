@@ -25,17 +25,26 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-        # Fixed Password
-        $Password = "EraRdp#2026!Win"
+        # Fixed Alphanumeric Password for maximum compatibility
+        $Password = "EraRdp2026WinPass"
         $Username = "runneradmin"
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
         
+        # Enforce password update on runneradmin and Administrator
         try {
             Set-LocalUser -Name $Username -Password $SecPassword
-        } catch {
-            net user $Username $Password /add
-            net localgroup Administrators $Username /add
-        }
+        } catch {}
+
+        net user $Username "$Password" /add
+        net user $Username "$Password"
+        net localgroup Administrators $Username /add
+
+        # Enable Administrator account as backup
+        try {
+            Set-LocalUser -Name "Administrator" -Password $SecPassword
+            Enable-LocalUser -Name "Administrator"
+        } catch {}
+        net user Administrator "$Password" /active:yes
 
         # Install cloudflared for global edge speed
         choco install cloudflared -y
