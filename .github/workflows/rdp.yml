@@ -26,8 +26,8 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-        $Password = "EraRdp2026WinPass"
-        $Username = "runneradmin"
+        $Password = "@EraRDP0811#"
+        $Username = "Erawat"
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
         
         try {
