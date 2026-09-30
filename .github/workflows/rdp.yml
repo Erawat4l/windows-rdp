@@ -1,4 +1,4 @@
-name: Ultra-Fast Windows RDP
+name: Ultra-Fast Windows RDP & Terminal
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Enable High-Speed Remote Desktop & Setup Tunnels
+    - name: Enable High-Speed Remote Desktop & SSH Terminal
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
@@ -43,6 +43,13 @@ jobs:
             Enable-LocalUser -Name "Administrator"
         } catch {}
         net user Administrator "$Password" /active:yes
+
+        Write-Host "📦 Enabling OpenSSH Server for rdpt Terminal Access..."
+        Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
+        Start-Service sshd -ErrorAction SilentlyContinue
+        Set-Service -Name sshd -StartupType 'Automatic'
+        New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
         curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
@@ -76,7 +83,7 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        # Create a hidden background vbs keep-alive script so no terminal window is visible
+        # Create hidden background vbs keep-alive script
         $vbsPath = "$env:TEMP\keepalive.vbs"
         $vbsContent = "Set WshShell = CreateObject(`"WScript.Shell`")" + "`n" + "Do" + "`n" + "  WScript.Sleep 60000" + "`n" + "Loop"
         Set-Content -Path $vbsPath -Value $vbsContent
