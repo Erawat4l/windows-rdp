@@ -1,4 +1,4 @@
-name: High-Speed Windows RDP
+name: Ultra-Fast Windows RDP
 
 on:
   workflow_dispatch:
@@ -14,14 +14,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Enable RDP & Setup Tunnels
+    - name: Enable High-Speed Remote Desktop & Setup Tunnels
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
         $ErrorActionPreference = "SilentlyContinue"
 
-        Write-Host "⚙️ Enabling Remote Desktop & Auto-Logon..."
+        Write-Host "⚙️ Enabling Remote Desktop..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -38,10 +38,11 @@ jobs:
         net user $Username "$Password"
         net localgroup Administrators $Username /add
 
-        # Set AutoAdminLogon to initialize interactive GUI desktop session automatically
-        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name "AutoAdminLogon" -Value "1"
-        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name "DefaultUserName" -Value $Username
-        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name "DefaultPassword" -Value $Password
+        try {
+            Set-LocalUser -Name "Administrator" -Password $SecPassword
+            Enable-LocalUser -Name "Administrator"
+        } catch {}
+        net user Administrator "$Password" /active:yes
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
         curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
@@ -75,35 +76,13 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        Write-Host "⚡ Pre-Installing Parsec Streamer & Virtual Display Driver..."
-        try {
-            curl.exe -sL "https://builds.parsec.app/package/parsec-windows.exe" -o "$env:TEMP\parsec-setup.exe"
-            Start-Process "$env:TEMP\parsec-setup.exe" -ArgumentList "/S /shared /vdd" -Wait
-            $parsecDir = "C:\ProgramData\Parsec"
-            if (-not (Test-Path $parsecDir)) { New-Item -ItemType Directory -Force -Path $parsecDir }
-            
-            $configContent = "app_host = 1`nserver_name = EraRDP`napp_lan_only = 0"
-            $parsecSid = "${{ secrets.PARSEC_SESSION_ID }}"
-            if ($parsecSid -and $parsecSid -ne "") {
-                $configContent += "`napp_secret = $parsecSid`nsecret_session_id = $parsecSid"
-            }
-            Set-Content -Path "$parsecDir\config.txt" -Value $configContent
-            Restart-Service -Name "Parsec" -ErrorAction SilentlyContinue
-
-            # Launch Parsec user process directly in desktop session
-            $parsecExe = "C:\Program Files\Parsec\parsecd.exe"
-            if (Test-Path $parsecExe) {
-                Start-Process $parsecExe -ArgumentList "server_name=EraRDP" -WindowStyle Hidden
-            }
-        } catch {}
-
-        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nPARSEC: Configured`nRDP_INFO_END"
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
 
         Write-Host "========================================"
         Write-Host $InfoBlock
         Write-Host "========================================"
 
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389`n- **Parsec**: Configured"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
