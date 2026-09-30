@@ -76,6 +76,12 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
+        # Create a hidden background vbs keep-alive script so no terminal window is visible
+        $vbsPath = "$env:TEMP\keepalive.vbs"
+        $vbsContent = "Set WshShell = CreateObject(`"WScript.Shell`")" + "`n" + "Do" + "`n" + "  WScript.Sleep 60000" + "`n" + "Loop"
+        Set-Content -Path $vbsPath -Value $vbsContent
+        Start-Process "wscript.exe" -ArgumentList "`"$vbsPath`""
+
         $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
 
         Write-Host "========================================"
@@ -88,13 +94,12 @@ jobs:
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
         } catch {}
 
-    - name: Keep Alive Loop
+    - name: Hidden Keep Alive Loop
       shell: powershell
       run: |
-        Write-Host "RDP session active. Keeping workflow alive for 6 hours..."
-        for ($i=1; $i -le 360; $i++) {
-            Start-Sleep -Seconds 60
-            Write-Host "RDP session active ($i / 360 minutes)..."
+        Write-Host "RDP session active in background. Keeping workflow alive for 6 hours..."
+        while (Get-Process -Name "wscript" -ErrorAction SilentlyContinue) {
+            Start-Sleep -Seconds 30
         }
 
     - name: Logout & Remove from Tailscale
