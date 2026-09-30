@@ -85,18 +85,25 @@ jobs:
             Start-Process "$env:TEMP\parsec-setup.exe" -ArgumentList "/S /shared" -Wait
             $parsecDir = "C:\ProgramData\Parsec"
             if (-not (Test-Path $parsecDir)) { New-Item -ItemType Directory -Force -Path $parsecDir }
-            Set-Content -Path "$parsecDir\config.txt" -Value "app_host = 1`nserver_name = EraRDP"
+            
+            $configContent = "app_host = 1`nserver_name = EraRDP"
+            $parsecSid = "${{ secrets.PARSEC_SESSION_ID }}"
+            if ($parsecSid -and $parsecSid -ne "") {
+                $configContent += "`nsecret_session_id = $parsecSid"
+            }
+            Set-Content -Path "$parsecDir\config.txt" -Value $configContent
+            Restart-Service -Name "Parsec" -ErrorAction SilentlyContinue
         } catch {
             Write-Host "Parsec setup notice."
         }
 
-        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nPARSEC: Installed`nRDP_INFO_END"
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nPARSEC: Configured`nRDP_INFO_END"
 
         Write-Host "========================================"
         Write-Host $InfoBlock
         Write-Host "========================================"
 
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389`n- **Parsec**: Pre-installed"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389`n- **Parsec**: Configured"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
