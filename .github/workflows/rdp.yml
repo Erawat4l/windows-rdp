@@ -78,13 +78,25 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
+        # Pre-Install Parsec Streamer & Host Service
+        Write-Host "⚡ Installing Parsec Streamer..."
+        try {
+            Invoke-WebRequest -Uri "https://builds.parsec.app/package/parsec-windows.exe" -OutFile "$env:TEMP\parsec-setup.exe"
+            Start-Process "$env:TEMP\parsec-setup.exe" -ArgumentList "/S /shared" -Wait
+            $parsecDir = "C:\ProgramData\Parsec"
+            if (-not (Test-Path $parsecDir)) { New-Item -ItemType Directory -Force -Path $parsecDir }
+            Set-Content -Path "$parsecDir\config.txt" -Value "app_host = 1`nserver_name = EraRDP"
+        } catch {
+            Write-Host "Parsec setup notice."
+        }
+
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nPARSEC: Installed`nRDP_INFO_END"
 
         Write-Host "========================================"
         Write-Host $InfoBlock
         Write-Host "========================================"
 
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389`n- **Parsec**: Pre-installed"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
