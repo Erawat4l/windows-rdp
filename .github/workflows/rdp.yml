@@ -36,13 +36,21 @@ jobs:
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
         net user Administrator "$Password" /active:yes
 
+        # Set Computer Hostname to RDP in GUI and System Registry
+        try {
+            Rename-Computer -NewName "RDP" -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "RDP" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "RDP" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "NV Hostname" -Value "RDP" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "Hostname" -Value "RDP" -ErrorAction SilentlyContinue
+        } catch {}
+
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
         $profilePath = "$profileDir\profile.ps1"
         $promptCode = 'function prompt { "Erawat@RDP " + (Get-Location).Path + "> " }'
         Set-Content -Path $profilePath -Value $promptCode -ErrorAction SilentlyContinue
 
-        # Also set prompt for user profile
         $userProfileDir = "C:\Users\Erawat\Documents\WindowsPowerShell"
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
@@ -73,7 +81,7 @@ jobs:
             if (-not (Test-Path $tailscaleExe)) {
                 $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
             }
-            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="rdp-runner"
+            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="RDP"
             Start-Sleep -Seconds 3
             $TsIp = (& $tailscaleExe ip -4).Trim()
         } catch {
