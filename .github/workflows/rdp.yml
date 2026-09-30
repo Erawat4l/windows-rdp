@@ -36,6 +36,17 @@ jobs:
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
         net user Administrator "$Password" /active:yes
 
+        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
+        $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
+        $profilePath = "$profileDir\profile.ps1"
+        $promptCode = 'function prompt { "Erawat@RDP " + (Get-Location).Path + "> " }'
+        Set-Content -Path $profilePath -Value $promptCode -ErrorAction SilentlyContinue
+
+        # Also set prompt for user profile
+        $userProfileDir = "C:\Users\Erawat\Documents\WindowsPowerShell"
+        if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
+        Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+
         try { Start-Service sshd -ErrorAction SilentlyContinue } catch {}
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
