@@ -14,13 +14,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Enable RDP & Set Fixed Password
+    - name: Enable RDP & Setup Tunnels
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
         $ErrorActionPreference = "SilentlyContinue"
 
+        Write-Host "⚙️ Enabling Remote Desktop..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -43,17 +44,16 @@ jobs:
         } catch {}
         net user Administrator "$Password" /active:yes
 
-        # Download cloudflared.exe directly for speed
         Write-Host "📦 Installing Cloudflare Tunnel..."
-        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "C:\Windows\cloudflared.exe"
+        curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
 
         $cfJob = Start-Job -ScriptBlock {
             $ErrorActionPreference = "SilentlyContinue"
-            cloudflared.exe tunnel --url tcp://localhost:3389
+            & "C:\Windows\cloudflared.exe" tunnel --url tcp://localhost:3389
         }
 
         $cfUrl = ""
-        for ($i=1; $i -le 20; $i++) {
+        for ($i=1; $i -le 15; $i++) {
             Start-Sleep -Seconds 2
             $output = Receive-Job -Job $cfJob -ErrorAction SilentlyContinue | Out-String
             if ($output -match 'tcp://[a-zA-Z0-9\.-]+:([0-9]+)') {
@@ -62,11 +62,9 @@ jobs:
             }
         }
 
-        # Install Tailscale directly via MSI
         Write-Host "📦 Installing Tailscale..."
         try {
-            Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
-            Start-Process "$env:TEMP\tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
+            choco install tailscale -y
             $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
             if (-not (Test-Path $tailscaleExe)) {
                 $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
@@ -78,10 +76,9 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        # Pre-Install Parsec Streamer & Host Service
-        Write-Host "⚡ Installing Parsec Streamer..."
+        Write-Host "⚡ Pre-Installing Parsec Streamer..."
         try {
-            Invoke-WebRequest -Uri "https://builds.parsec.app/package/parsec-windows.exe" -OutFile "$env:TEMP\parsec-setup.exe"
+            curl.exe -sL "https://builds.parsec.app/package/parsec-windows.exe" -o "$env:TEMP\parsec-setup.exe"
             Start-Process "$env:TEMP\parsec-setup.exe" -ArgumentList "/S /shared" -Wait
             $parsecDir = "C:\ProgramData\Parsec"
             if (-not (Test-Path $parsecDir)) { New-Item -ItemType Directory -Force -Path $parsecDir }
@@ -93,9 +90,7 @@ jobs:
             }
             Set-Content -Path "$parsecDir\config.txt" -Value $configContent
             Restart-Service -Name "Parsec" -ErrorAction SilentlyContinue
-        } catch {
-            Write-Host "Parsec setup notice."
-        }
+        } catch {}
 
         $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nPARSEC: Configured`nRDP_INFO_END"
 
