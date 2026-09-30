@@ -47,6 +47,12 @@ jobs:
         Write-Host "📦 Enabling OpenSSH Server for rdpt Terminal Access..."
         try {
             choco install openssh -y --params "/SSHServerFeature"
+            $sshDir = "C:\Program Files\OpenSSH-Win64"
+            if (Test-Path $sshDir) {
+                Set-Location $sshDir
+                if (Test-Path ".\install-sshd.ps1") { .\install-sshd.ps1 }
+                ssh-keygen -A
+            }
             Start-Service sshd -ErrorAction SilentlyContinue
             Set-Service -Name sshd -StartupType "Automatic" -ErrorAction SilentlyContinue
             New-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -DisplayName "OpenSSH Server (sshd)" -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue
