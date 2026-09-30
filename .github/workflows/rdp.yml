@@ -19,43 +19,29 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
-        $ErrorActionPreference = "SilentlyContinue"
-
-        Write-Host "⚙️ Enabling Remote Desktop..."
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Write-Host "⚙️ Enabling Remote Desktop & OpenSSH..."
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
         $Password = "@EraRDP0811#"
         $Username = "Erawat"
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
-        
-        try {
-            Set-LocalUser -Name $Username -Password $SecPassword
-        } catch {}
 
+        try { Set-LocalUser -Name $Username -Password $SecPassword } catch {}
         net user $Username "$Password" /add
         net user $Username "$Password"
         net localgroup Administrators $Username /add
 
-        try {
-            Set-LocalUser -Name "Administrator" -Password $SecPassword
-            Enable-LocalUser -Name "Administrator"
-        } catch {}
+        try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
         net user Administrator "$Password" /active:yes
 
-        Write-Host "📦 Starting OpenSSH Server for rdpt Terminal Access..."
-        try {
-            Start-Service sshd -ErrorAction SilentlyContinue
-            Set-Service -Name sshd -StartupType "Automatic" -ErrorAction SilentlyContinue
-            New-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -DisplayName "OpenSSH Server" -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue
-        } catch {}
+        try { Start-Service sshd -ErrorAction SilentlyContinue } catch {}
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
         curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
 
         $cfJob = Start-Job -ScriptBlock {
-            $ErrorActionPreference = "SilentlyContinue"
             & "C:\Windows\cloudflared.exe" tunnel --url tcp://localhost:3389
         }
 
@@ -83,30 +69,21 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        # Create hidden background vbs keep-alive script
-        $vbsPath = "$env:TEMP\keepalive.vbs"
-        $vbsContent = "Set WshShell = CreateObject(`"WScript.Shell`")" + "`n" + "Do" + "`n" + "  WScript.Sleep 60000" + "`n" + "Loop"
-        Set-Content -Path $vbsPath -Value $vbsContent
-        Start-Process "wscript.exe" -ArgumentList "`"$vbsPath`""
-
         $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
-
-        Write-Host "========================================"
         Write-Host $InfoBlock
-        Write-Host "========================================"
-
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
         } catch {}
 
-    - name: Hidden Keep Alive Loop
+    - name: Keep Alive Loop
       shell: powershell
       run: |
-        Write-Host "RDP session active in background. Keeping workflow alive for 6 hours..."
-        while (Get-Process -Name "wscript" -ErrorAction SilentlyContinue) {
-            Start-Sleep -Seconds 30
+        Write-Host "RDP session active. Keeping workflow alive for 6 hours..."
+        for ($i=1; $i -le 360; $i++) {
+            Start-Sleep -Seconds 60
+            Write-Host "RDP session active ($i / 360 minutes)..."
         }
 
     - name: Logout & Remove from Tailscale
