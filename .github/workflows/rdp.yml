@@ -23,7 +23,7 @@ jobs:
 
         Write-Host "⚙️ Enabling Remote Desktop..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
         $Password = "@EraRDP0811#"
@@ -46,9 +46,9 @@ jobs:
 
         Write-Host "📦 Starting OpenSSH Server for rdpt Terminal Access..."
         try {
-            Start-Service sshd
-            Set-Service -Name sshd -StartupType "Automatic"
-            Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP"
+            Start-Service sshd -ErrorAction SilentlyContinue
+            Set-Service -Name sshd -StartupType "Automatic" -ErrorAction SilentlyContinue
+            New-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -DisplayName "OpenSSH Server" -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue
         } catch {}
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
