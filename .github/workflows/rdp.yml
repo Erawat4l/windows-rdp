@@ -17,6 +17,8 @@ jobs:
     - name: Enable High-Speed Remote Desktop & SSH Terminal
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SECRET_USER: ${{ secrets.RDP_USERNAME }}
+        SECRET_PASS: ${{ secrets.RDP_PASSWORD }}
       shell: powershell
       run: |
         Write-Host "⚙️ Enabling Remote Desktop & OpenSSH..."
@@ -24,8 +26,8 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
-        $Password = "@EraRDP0811#"
-        $Username = "Erawat"
+        $Username = if ($env:SECRET_USER -and $env:SECRET_USER -ne "") { $env:SECRET_USER } else { "Erawat" }
+        $Password = if ($env:SECRET_PASS -and $env:SECRET_PASS -ne "") { $env:SECRET_PASS } else { "@EraRDP0811#" }
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
         try { Set-LocalUser -Name $Username -Password $SecPassword } catch {}
@@ -46,11 +48,11 @@ jobs:
         } catch {}
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
-        $promptCode = 'function prompt { "Erawat@RDP " + (Get-Location).Path + "> " }'
+        $promptCode = 'function prompt { "' + $Username + '@RDP " + (Get-Location).Path + "> " }'
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
         Set-Content -Path "$profileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        $userProfileDir = "C:\Users\Erawat\Documents\WindowsPowerShell"
+        $userProfileDir = "C:\Users\$Username\Documents\WindowsPowerShell"
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
