@@ -70,8 +70,11 @@ jobs:
             
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            $cleanSshdConfig = "Port 22`r`nProtocol 2`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp C:/Windows/System32/OpenSSH/sftp-server.exe"
-            [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
+            $sshdConfig = "$sshdDir\sshd_config"
+            if (Test-Path $sshdConfig) {
+                (Get-Content $sshdConfig) | Where-Object { $_ -notmatch 'Match Group administrators' -and $_ -notmatch 'AuthorizedKeysFile __PROGRAMDATA__' } | Set-Content $sshdConfig -Encoding ascii
+                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes" -Encoding ascii
+            }
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
             if ($pubKey -and $pubKey -ne "") {
