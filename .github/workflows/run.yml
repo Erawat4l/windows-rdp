@@ -63,17 +63,14 @@ jobs:
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
 
         try {
-            choco install openssh -y --params '"/SSHServerFeature"' -ErrorAction SilentlyContinue
-        } catch {}
-
-        try {
             Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
             Start-Service sshd -ErrorAction SilentlyContinue
             Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
             
-            if (Test-Path "C:\ProgramData\ssh\sshd_config") {
-                (Get-Content "C:\ProgramData\ssh\sshd_config") | Where-Object { $_ -notmatch 'Match Group administrators' -and $_ -notmatch 'AuthorizedKeysFile __PROGRAMDATA__' } | Set-Content "C:\ProgramData\ssh\sshd_config"
-                Add-Content -Path "C:\ProgramData\ssh\sshd_config" -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes"
+            $sshdConfig = "C:\ProgramData\ssh\sshd_config"
+            if (Test-Path $sshdConfig) {
+                (Get-Content $sshdConfig) | Where-Object { $_ -notmatch 'Match Group administrators' -and $_ -notmatch 'AuthorizedKeysFile __PROGRAMDATA__' } | Set-Content $sshdConfig
+                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes"
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
