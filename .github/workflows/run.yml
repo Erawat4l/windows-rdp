@@ -67,21 +67,11 @@ jobs:
             Start-Service sshd -ErrorAction SilentlyContinue
             Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
             
-            $sshdConfig = "C:\ProgramData\ssh\sshd_config"
-            if (Test-Path $sshdConfig) {
-                $lines = (Get-Content $sshdConfig) | Where-Object { $_ -notmatch 'Match Group administrators' -and $_ -notmatch 'AuthorizedKeysFile __PROGRAMDATA__' }
-                $lines += "PasswordAuthentication yes"
-                $lines += "PubkeyAuthentication yes"
-                [System.IO.File]::WriteAllLines($sshdConfig, $lines, [System.Text.Encoding]::ASCII)
-            }
-
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
             if ($pubKey -and $pubKey -ne "") {
                 $adminKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                icacls.exe $adminKeys /inheritance:r 2>$null
-                icacls.exe $adminKeys /grant "SYSTEM:(F)" 2>$null
-                icacls.exe $adminKeys /grant "BUILTIN\Administrators:(F)" 2>$null
+                & icacls.exe $adminKeys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
 
                 $userKeysDir = "C:\Users\$Username\.ssh"
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
