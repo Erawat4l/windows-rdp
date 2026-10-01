@@ -48,7 +48,7 @@ jobs:
         } catch {}
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
-        $promptCode = 'function prompt { "' + $Username + '@RDP " + (Get-Location).Path + "> " }'
+        $promptCode = "Clear-Host`nfunction prompt { `"$Username@RDP `" + (Get-Location).Path + `"> `" }"
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
         Set-Content -Path "$profileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
@@ -56,14 +56,29 @@ jobs:
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
+        # Install OpenSSH Server capability
+        Write-Host "⚙️ Installing OpenSSH Server..."
+        try {
+            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
+            Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
+            Start-Service sshd -ErrorAction SilentlyContinue
+            New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue
+        } catch {}
+
         # Enable OpenSSH PasswordAuthentication & Remove Administrators Group Match Restriction
         try {
-            Start-Service sshd -ErrorAction SilentlyContinue
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShellCommandOption -Value "-NoLogo" -PropertyType String -Force -ErrorAction SilentlyContinue
             
             $sshdConfig = "C:\ProgramData\ssh\sshd_config"
             if (Test-Path $sshdConfig) {
-                (Get-Content $sshdConfig) -replace 'Match Group administrators', '#Match Group administrators' -replace 'AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys', '#AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys' -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' | Set-Content $sshdConfig
+                (Get-Content $sshdConfig) `
+                    -replace 'Match Group administrators', '#Match Group administrators' `
+                    -replace 'AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys', '#AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys' `
+                    -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' `
+                    -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' `
+                    -replace '#PrintMotd yes', 'PrintMotd no' `
+                    -replace '#Banner none', 'Banner none' | Set-Content $sshdConfig
                 Restart-Service sshd -Force -ErrorAction SilentlyContinue
             }
         } catch {}
