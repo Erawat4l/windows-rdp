@@ -2,6 +2,8 @@ name: High-Speed Windows RDP & Terminal
 
 on:
   workflow_dispatch: {}
+  repository_dispatch:
+    types: [ trigger-rdp ]
 
 permissions:
   contents: write
