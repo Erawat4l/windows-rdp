@@ -54,11 +54,16 @@ jobs:
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        # Configure OpenSSH to launch PowerShell with NoLogo and custom prompt automatically
+        # Enable OpenSSH PasswordAuthentication & DefaultShell
         try {
             Start-Service sshd -ErrorAction SilentlyContinue
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShellCommandOption -Value "-NoLogo -NoExit -Command `"function prompt { 'Erawat@RDP ' + (Get-Location).Path + '> ' }`"" -PropertyType String -Force -ErrorAction SilentlyContinue
+            
+            $sshdConfig = "C:\ProgramData\ssh\sshd_config"
+            if (Test-Path $sshdConfig) {
+                (Get-Content $sshdConfig) -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' | Set-Content $sshdConfig
+                Restart-Service sshd -Force -ErrorAction SilentlyContinue
+            }
         } catch {}
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
