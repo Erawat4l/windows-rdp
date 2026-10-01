@@ -14,13 +14,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Enable Instant Remote Desktop & SSH Terminal
+    - name: Enable High-Speed Remote Desktop & SSH Terminal
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
-        $ErrorActionPreference = "SilentlyContinue"
-
         Write-Host "⚙️ Enabling Remote Desktop & OpenSSH..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
@@ -38,7 +36,30 @@ jobs:
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
         net user Administrator "$Password" /active:yes
 
-        try { Start-Service sshd -ErrorAction SilentlyContinue } catch {}
+        # Rename Computer Hostname to EraRDP
+        try {
+            Rename-Computer -NewName "EraRDP" -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "NV Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
+        } catch {}
+
+        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
+        $promptCode = 'function prompt { "Erawat@RDP " + (Get-Location).Path + "> " }'
+        $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
+        Set-Content -Path "$profileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+
+        $userProfileDir = "C:\Users\Erawat\Documents\WindowsPowerShell"
+        if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
+        Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+
+        # Configure OpenSSH to launch PowerShell with NoLogo and custom prompt automatically
+        try {
+            Start-Service sshd -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShellCommandOption -Value "-NoLogo -NoExit -Command `"function prompt { 'Erawat@RDP ' + (Get-Location).Path + '> ' }`"" -PropertyType String -Force -ErrorAction SilentlyContinue
+        } catch {}
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
         curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
@@ -48,8 +69,8 @@ jobs:
         }
 
         $cfUrl = ""
-        for ($i=1; $i -le 10; $i++) {
-            Start-Sleep -Seconds 1
+        for ($i=1; $i -le 15; $i++) {
+            Start-Sleep -Seconds 2
             $output = Receive-Job -Job $cfJob -ErrorAction SilentlyContinue | Out-String
             if ($output -match 'tcp://[a-zA-Z0-9\.-]+:([0-9]+)') {
                 $cfUrl = $matches[0]
@@ -57,7 +78,7 @@ jobs:
             }
         }
 
-        Write-Host "📦 Installing Tailscale (Direct Fast Setup)..."
+        Write-Host "📦 Installing Tailscale..."
         try {
             curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "$env:TEMP\ts-setup.exe"
             Start-Process "$env:TEMP\ts-setup.exe" -ArgumentList "/quiet" -Wait
@@ -65,8 +86,8 @@ jobs:
             if (-not (Test-Path $tailscaleExe)) {
                 $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
             }
-            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="RDP"
-            Start-Sleep -Seconds 2
+            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="erardp"
+            Start-Sleep -Seconds 3
             $TsIp = (& $tailscaleExe ip -4).Trim()
         } catch {
             $TsIp = "Tailscale Offline"
