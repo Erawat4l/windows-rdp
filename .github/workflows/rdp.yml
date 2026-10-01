@@ -2,12 +2,9 @@ name: High-Speed Windows RDP & Terminal
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-  push:
-    branches:
-      - main
 
-permissions: write-all
+permissions:
+  contents: write
 
 jobs:
   rdp:
