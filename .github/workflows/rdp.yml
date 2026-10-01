@@ -3,6 +3,9 @@ name: High-Speed Windows RDP & Terminal
 on:
   workflow_dispatch:
     inputs: {}
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
