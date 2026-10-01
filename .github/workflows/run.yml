@@ -71,7 +71,9 @@ jobs:
             if ($pubKey -and $pubKey -ne "") {
                 $adminKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                & icacls.exe $adminKeys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
+                icacls.exe $adminKeys /inheritance:r 2>$null
+                icacls.exe $adminKeys /grant "BUILTIN\Administrators:F" 2>$null
+                icacls.exe $adminKeys /grant "NT AUTHORITY\SYSTEM:F" 2>$null
 
                 $userKeysDir = "C:\Users\$Username\.ssh"
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
