@@ -70,7 +70,7 @@ jobs:
             
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            $cleanSshdConfig = "Port 22`r`nProtocol 2`r`nHostKey __PROGRAMDATA__/ssh/ssh_host_rsa_key`r`nHostKey __PROGRAMDATA__/ssh/ssh_host_ed25519_key`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe"
+            $cleanSshdConfig = "Port 22`r`nProtocol 2`r`nHostKey C:\ProgramData\ssh\ssh_host_rsa_key`r`nHostKey C:\ProgramData\ssh\ssh_host_ed25519_key`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe"
             [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
