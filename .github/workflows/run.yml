@@ -70,7 +70,7 @@ jobs:
             
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            $cleanSshdConfig = "Port 22`r`nProtocol 2`r`nHostKey C:\ProgramData\ssh\ssh_host_rsa_key`r`nHostKey C:\ProgramData\ssh\ssh_host_ed25519_key`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe"
+            $cleanSshdConfig = "Port 22`r`nProtocol 2`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp C:/Windows/System32/OpenSSH/sftp-server.exe"
             [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
@@ -82,12 +82,16 @@ jobs:
 
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+                icacls.exe $adminKeys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
+            Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShellCommandOption -Value "-NoLogo" -PropertyType String -Force
 
             Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
+            Start-Service sshd -ErrorAction SilentlyContinue
+            Restart-Service sshd -Force -ErrorAction SilentlyContinue
             Start-Service sshd -ErrorAction SilentlyContinue
             Restart-Service sshd -Force -ErrorAction SilentlyContinue
         } catch {}
