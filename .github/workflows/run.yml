@@ -64,6 +64,8 @@ jobs:
 
         try {
             Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
+            Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
+            Start-Service sshd -ErrorAction SilentlyContinue
             
             $sshdDir = "C:\ProgramData\ssh"
             if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir }
