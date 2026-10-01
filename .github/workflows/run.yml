@@ -75,7 +75,7 @@ jobs:
                 [System.IO.File]::WriteAllLines($sshdConfig, $lines, [System.Text.Encoding]::ASCII)
             }
 
-            $pubKey = "${{ secrets.SSH_PUBKEY }}"
+            $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
             if ($pubKey -and $pubKey -ne "") {
                 $adminKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`n", [System.Text.Encoding]::ASCII)
