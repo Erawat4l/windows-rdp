@@ -56,14 +56,14 @@ jobs:
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        # Enable OpenSSH PasswordAuthentication & DefaultShell
+        # Enable OpenSSH PasswordAuthentication & Remove Administrators Group Match Restriction
         try {
             Start-Service sshd -ErrorAction SilentlyContinue
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
             
             $sshdConfig = "C:\ProgramData\ssh\sshd_config"
             if (Test-Path $sshdConfig) {
-                (Get-Content $sshdConfig) -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' | Set-Content $sshdConfig
+                (Get-Content $sshdConfig) -replace 'Match Group administrators', '#Match Group administrators' -replace 'AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys', '#AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys' -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' | Set-Content $sshdConfig
                 Restart-Service sshd -Force -ErrorAction SilentlyContinue
             }
         } catch {}
