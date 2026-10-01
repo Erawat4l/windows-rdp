@@ -74,8 +74,8 @@ jobs:
 
             $sshdConfig = "$sshdDir\sshd_config"
             if (Test-Path $sshdConfig) {
-                (Get-Content $sshdConfig) | Where-Object { $_ -notmatch 'Match Group administrators' -and $_ -notmatch 'AuthorizedKeysFile __PROGRAMDATA__' } | Set-Content $sshdConfig -Encoding ascii
-                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes" -Encoding ascii
+                (Get-Content $sshdConfig) -replace '^Match Group administrators', '#Match Group administrators' -replace '^\s+AuthorizedKeysFile __PROGRAMDATA__', '#AuthorizedKeysFile __PROGRAMDATA__' | Set-Content $sshdConfig -Encoding ascii
+                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys" -Encoding ascii
             }
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
@@ -87,7 +87,7 @@ jobs:
 
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                icacls.exe $adminKeys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
+                icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
