@@ -6,6 +6,7 @@ on:
     branches:
       - main
 
+permissions: write-all
 
 jobs:
   rdp:
@@ -113,8 +114,9 @@ jobs:
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
-            gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
+            gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock" 2>$null
         } catch {}
+        $global:LASTEXITCODE = 0
 
     - name: Keep Alive Loop
       shell: powershell
