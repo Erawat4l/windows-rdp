@@ -1,4 +1,4 @@
-name: High-Speed Windows RDP & Terminal
+name: Personal Windows PC RDP & Terminal
 
 on:
   workflow_dispatch:
@@ -10,13 +10,13 @@ permissions: write-all
 
 jobs:
   rdp:
-    runs-on: windows-2022
+    runs-on: windows-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Enable High-Speed Remote Desktop & SSH Terminal
+    - name: Configure Clean Personal PC (Erawat), Restore State & Enable High-Speed RDP/SSH
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SECRET_USER: ${{ secrets.RDP_USERNAME }}
@@ -24,83 +24,131 @@ jobs:
       shell: powershell
       run: |
         $ErrorActionPreference = 'SilentlyContinue'
-        Write-Host "⚙️ Enabling Remote Desktop..."
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
-        $Username = "Administrator"
-        $Password = 'EraRDP2026Pass!'
+        Write-Host "⚙️ Creating Primary User Account: Erawat..."
+        $Username = if ("${{ secrets.RDP_USERNAME }}" -and "${{ secrets.RDP_USERNAME }}" -ne "") { "${{ secrets.RDP_USERNAME }}" } else { "Erawat" }
+        $Password = if ("${{ secrets.RDP_PASSWORD }}" -and "${{ secrets.RDP_PASSWORD }}" -ne "") { "${{ secrets.RDP_PASSWORD }}" } else { '@EraRDP0811#' }
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
-        try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
-        & net.exe user Administrator "$Password" /active:yes
-        & net.exe localgroup Administrators Administrator /add
+        # Create Primary User: Erawat
+        New-LocalUser -Name "Erawat" -Password $SecPassword -FullName "Erawat" -Description "Personal PC Owner" -ErrorAction SilentlyContinue
+        Set-LocalUser -Name "Erawat" -Password $SecPassword -ErrorAction SilentlyContinue
+        Enable-LocalUser -Name "Erawat" -ErrorAction SilentlyContinue
+        Add-LocalGroupMember -Group "Administrators" -Member "Erawat" -ErrorAction SilentlyContinue
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Erawat" -ErrorAction SilentlyContinue
 
-        try { Set-LocalUser -Name "runneradmin" -Password $SecPassword } catch {}
-        & net.exe user runneradmin "$Password"
-        & net.exe localgroup Administrators runneradmin /add
+        # Hide extra runner accounts from Windows Login screen (Only Erawat visible)
+        $userListPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList"
+        if (-not (Test-Path $userListPath)) { New-Item -Path $userListPath -Force -ErrorAction SilentlyContinue }
+        Set-ItemProperty -Path $userListPath -Name "runneradmin" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $userListPath -Name "Administrator" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $userListPath -Name "Guest" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $userListPath -Name "DefaultAccount" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+        # Configure AutoLogon directly into Erawat
+        $winlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+        Set-ItemProperty -Path $winlogonPath -Name "AutoAdminLogon" -Value "1" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $winlogonPath -Name "DefaultUserName" -Value "Erawat" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $winlogonPath -Name "DefaultPassword" -Value "$Password" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $winlogonPath -Name "DefaultDomainName" -Value "EraRDP" -ErrorAction SilentlyContinue
+
+        # Initialize User Directory & Restore Saved Personal Storage State
+        $userDir = "C:\Users\Erawat"
+        if (-not (Test-Path $userDir)) { New-Item -ItemType Directory -Force -Path $userDir -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Force -Path "$userDir\Desktop" -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path "$userDir\Documents" -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path "$userDir\Downloads" -ErrorAction SilentlyContinue
+
+        Write-Host "📦 Checking for saved Personal PC storage state..."
+        & gh release download pc-state --pattern "erawat_pc_state.zip" --dir "$env:TEMP" --clobber 2>$null
+        if (Test-Path "$env:TEMP\erawat_pc_state.zip") {
+            Write-Host "🔄 Restoring your Desktop, Documents, and Downloads..."
+            Expand-Archive -Path "$env:TEMP\erawat_pc_state.zip" -DestinationPath "$userDir" -Force -ErrorAction SilentlyContinue
+            Write-Host "✅ Personal PC state successfully restored!"
+        } else {
+            Write-Host "ℹ️ Fresh Personal PC storage initialized."
+        }
+
+        # Clean Desktop Clutter (Remove random runner shortcuts)
+        Remove-Item -Path "C:\Users\Public\Desktop\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "C:\Users\Erawat\Desktop\*" -Recurse -Force -ErrorAction SilentlyContinue
 
         # Rename Computer Hostname to EraRDP
-        try {
-            Rename-Computer -NewName "EraRDP" -Force -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "NV Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
-        } catch {}
+        Rename-Computer -NewName "EraRDP" -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "NV Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
 
-        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
-        $promptCode = "Write-Host `"`e[2J`e[H`" -NoNewline; function prompt { `"Erawat@RDP `" + ((Get-Location).Path -replace 'runneradmin','erawat' -replace 'Administrator','erawat') + `"> `" }"
+        # Configure Remote Desktop & Firewall
+        Write-Host "⚙️ Enabling Remote Desktop & Configuring System..."
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+        Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
+
+        # Optimize Network & System Latency (Disable Nagle Algorithm & Network Throttling)
+        $sysProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
+        if (-not (Test-Path $sysProfile)) { New-Item -Path $sysProfile -Force -ErrorAction SilentlyContinue }
+        Set-ItemProperty -Path $sysProfile -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $sysProfile -Name "SystemResponsiveness" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+        Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" | ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+        }
+
+        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat>
+        $promptCode = '$esc = [char]27; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { "Erawat@RDP " + ((Get-Location).Path -replace "runneradmin","erawat" -replace "Administrator","erawat") + "> " }'
+
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
+        if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
         Set-Content -Path "$profileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+        Set-Content -Path "$profileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        $userProfileDir = "C:\Users\Administrator\Documents\WindowsPowerShell"
-        if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
+        $userProfileDir = "C:\Users\Erawat\Documents\WindowsPowerShell"
+        if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir -ErrorAction SilentlyContinue }
+        Set-Content -Path "$userProfileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
-
-        $runnerProfileDir = "C:\Users\runneradmin\Documents\WindowsPowerShell"
-        if (-not (Test-Path $runnerProfileDir)) { New-Item -ItemType Directory -Force -Path $runnerProfileDir }
-        Set-Content -Path "$runnerProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
         # Disable Windows Firewall & Configure OpenSSH Server
         Write-Host "⚙️ Disabling Windows Firewall & Configuring OpenSSH Server..."
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
         Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
 
-        try {
-            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
-            Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
-            Start-Service sshd -ErrorAction SilentlyContinue
-            
-            $sshdDir = "C:\ProgramData\ssh"
-            if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir }
-            & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
+        Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
+        Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
+        Start-Service sshd -ErrorAction SilentlyContinue
+        Get-Process -Name sshd -ErrorAction SilentlyContinue | ForEach-Object { $_.PriorityClass = 'High' }
+        
+        $sshdDir = "C:\ProgramData\ssh"
+        if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir -ErrorAction SilentlyContinue }
+        & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nStrictModes no`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe`r`n"
-            [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
+        $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nStrictModes no`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nUseDNS no`r`nGSSAPIAuthentication no`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe`r`n"
+        [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
 
-            $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
-            if ($pubKey -and $pubKey -ne "") {
-                $adminKeys = "$sshdDir\administrators_authorized_keys"
-                [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                takeown.exe /F "$adminKeys" /A
-                icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
+        $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
+        if ($pubKey -and $pubKey -ne "") {
+            $adminKeys = "$sshdDir\administrators_authorized_keys"
+            [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+            takeown.exe /F "$adminKeys" /A 2>$null
+            icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
 
-                $userKeysDir = "C:\Users\Administrator\.ssh"
-                if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
-                $userKeys = "$userKeysDir\authorized_keys"
-                [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                icacls.exe "$userKeysDir" /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
-                icacls.exe "$userKeys" /inheritance:r /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
-            }
+            $userKeysDir = "C:\Users\Erawat\.ssh"
+            if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir -ErrorAction SilentlyContinue }
+            $userKeys = "$userKeysDir\authorized_keys"
+            [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+            icacls.exe "$userKeysDir" /grant "Erawat:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
+            icacls.exe "$userKeys" /inheritance:r /grant "Erawat:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
+        }
 
-            if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
-            New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-            New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShellCommandOption" -Value "-NoLogo -NoProfileLoadBanner" -PropertyType String -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force -ErrorAction SilentlyContinue }
+        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShellCommandOption" -Value "-NoLogo" -PropertyType String -Force -ErrorAction SilentlyContinue
 
-            Restart-Service sshd -Force -ErrorAction SilentlyContinue
-        } catch {}
+        Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
         Write-Host "📦 Installing Cloudflare Tunnel..."
         curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
@@ -120,42 +168,55 @@ jobs:
         }
 
         Write-Host "📦 Installing Tailscale..."
-        try {
-            curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "$env:TEMP\ts-setup.exe"
-            Start-Process "$env:TEMP\ts-setup.exe" -ArgumentList "/quiet" -Wait
-            $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
-            if (-not (Test-Path $tailscaleExe)) {
-                $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-            }
-            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="erardp"
-            Start-Sleep -Seconds 3
-            $TsIp = (& $tailscaleExe ip -4).Trim()
-        } catch {
-            $TsIp = "Tailscale Offline"
+        curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "$env:TEMP\ts-setup.exe"
+        Start-Process "$env:TEMP\ts-setup.exe" -ArgumentList "/quiet" -Wait
+        $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
+        if (-not (Test-Path $tailscaleExe)) {
+            $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
         }
+        & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="erardp"
+        Start-Sleep -Seconds 3
+        $TsIp = (& $tailscaleExe ip -4).Trim()
 
-        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: Administrator`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: Erawat`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
         Write-Host $InfoBlock
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: Administrator`n- **Password**: $Password`n- **Port**: 3389"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Personal Windows PC RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: Erawat`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
         } catch {}
         exit 0
 
-    - name: Keep Alive Loop
+    - name: Keep Alive & Auto-Save Personal PC Storage Loop
       shell: powershell
       run: |
-        Write-Host "RDP session active. Keeping workflow alive for 6 hours..."
+        Write-Host "🖥️ Personal Windows PC Active (6 Hour Max Duration). Periodically backing up your Desktop, Documents, and Downloads..."
+        $userDir = "C:\Users\Erawat"
         for ($i=1; $i -le 360; $i++) {
             Start-Sleep -Seconds 60
-            Write-Host "RDP session active ($i / 360 minutes)..."
+            if ($i % 5 -eq 0) {
+                try {
+                    Write-Host "💾 Auto-saving your Personal PC storage state ($i / 360 min)..."
+                    Compress-Archive -Path "$userDir\Desktop","$userDir\Documents","$userDir\Downloads" -DestinationPath "$env:TEMP\erawat_pc_state.zip" -Force
+                    gh release upload pc-state "$env:TEMP\erawat_pc_state.zip" --clobber 2>$null
+                } catch {}
+            }
         }
 
-    - name: Logout & Remove from Tailscale
+    - name: Final Save & Remove from Tailscale
       if: always()
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
+        Write-Host "💾 Saving final Personal PC storage state before VM shutdown..."
+        $userDir = "C:\Users\Erawat"
+        try {
+            Compress-Archive -Path "$userDir\Desktop","$userDir\Documents","$userDir\Downloads" -DestinationPath "$env:TEMP\erawat_pc_state.zip" -Force
+            gh release upload pc-state "$env:TEMP\erawat_pc_state.zip" --clobber 2>$null
+            Write-Host "✅ Personal PC state successfully saved to cloud persistent storage!"
+        } catch {}
+
         $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
         if (Test-Path $tailscaleExe) {
             & $tailscaleExe logout
