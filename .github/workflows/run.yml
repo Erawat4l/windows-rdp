@@ -76,16 +76,8 @@ jobs:
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
             $sshdConfig = "$sshdDir\sshd_config"
-            if (Test-Path $sshdConfig) {
-                $configText = Get-Content $sshdConfig -Raw
-                $configText = $configText -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes'
-                $configText = $configText -replace 'PasswordAuthentication no', 'PasswordAuthentication yes'
-                $configText = $configText -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes'
-                if ($configText -match 'Match Group administrators') {
-                    $configText = $configText -replace 'Match Group administrators', "Match Group administrators`r`n       PasswordAuthentication yes`r`n       PubkeyAuthentication yes"
-                }
-                [System.IO.File]::WriteAllText($sshdConfig, $configText, [System.Text.Encoding]::ASCII)
-            }
+            $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nMatch Group administrators`r`n    AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys`r`n    PasswordAuthentication yes`r`n    PubkeyAuthentication yes`r`nSubsystem sftp sftp-server.exe`r`n"
+            [System.IO.File]::WriteAllText($sshdConfig, $cleanSshdConfig, [System.Text.Encoding]::ASCII)
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
             if ($pubKey -and $pubKey -ne "") {
