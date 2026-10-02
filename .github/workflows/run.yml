@@ -27,7 +27,7 @@ jobs:
       run: |
         $ErrorActionPreference = 'SilentlyContinue'
 
-        Write-Host "⚙️ Creating Primary User Account: Erawat..."
+        Write-Host "Creating Primary User Account: Erawat..."
         $Username = "Erawat"
         if ($env:SECRET_USER -and $env:SECRET_USER -ne "") { $Username = $env:SECRET_USER }
 
@@ -67,15 +67,15 @@ jobs:
         New-Item -ItemType Directory -Force -Path "$userDir/Documents" -ErrorAction SilentlyContinue
         New-Item -ItemType Directory -Force -Path "$userDir/Downloads" -ErrorAction SilentlyContinue
 
-        Write-Host "📦 Checking for saved Personal PC storage state..."
+        Write-Host "Checking for saved Personal PC storage state..."
         & gh release download pc-state --pattern "erawat_pc_state.zip" --dir "$env:TEMP" --clobber 2>$null
         if (Test-Path $stateZip) {
-            Write-Host "🔄 Restoring your Desktop, Documents, and Downloads..."
+            Write-Host "Restoring your Desktop, Documents, and Downloads..."
             Expand-Archive -Path $stateZip -DestinationPath $userDir -Force -ErrorAction SilentlyContinue
-            Write-Host "✅ Personal PC state successfully restored!"
+            Write-Host "Personal PC state successfully restored!"
         }
         if (-not (Test-Path $stateZip)) {
-            Write-Host "ℹ️ Fresh Personal PC storage initialized."
+            Write-Host "Fresh Personal PC storage initialized."
         }
 
         # Clean Desktop Clutter (Remove random runner shortcuts)
@@ -90,7 +90,7 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "Hostname" -Value "EraRDP" -ErrorAction SilentlyContinue
 
         # Configure Remote Desktop & Firewall
-        Write-Host "⚙️ Enabling Remote Desktop & Configuring System..."
+        Write-Host "Enabling Remote Desktop & Configuring System..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
@@ -122,7 +122,7 @@ jobs:
         Set-Content -Path "$userProfileDir/Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
         # Disable Windows Firewall & Configure OpenSSH Server
-        Write-Host "⚙️ Disabling Windows Firewall & Configuring OpenSSH Server..."
+        Write-Host "Disabling Windows Firewall & Configuring OpenSSH Server..."
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
         Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
 
@@ -159,7 +159,7 @@ jobs:
 
         Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
-        Write-Host "📦 Installing Cloudflare Tunnel..."
+        Write-Host "Installing Cloudflare Tunnel..."
         curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:/Windows/cloudflared.exe"
 
         $cfJob = Start-Job -ScriptBlock {
@@ -176,7 +176,7 @@ jobs:
             }
         }
 
-        Write-Host "📦 Installing Tailscale..."
+        Write-Host "Installing Tailscale..."
         curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "$env:TEMP/ts-setup.exe"
         Start-Process "$env:TEMP/ts-setup.exe" -ArgumentList "/quiet" -Wait
         $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
@@ -199,14 +199,14 @@ jobs:
     - name: Keep Alive & Auto-Save Personal PC Storage Loop
       shell: powershell
       run: |
-        Write-Host "🖥️ Personal Windows PC Active (6 Hour Max Duration). Periodically backing up your Desktop, Documents, and Downloads..."
+        Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up Desktop, Documents, and Downloads..."
         $userDir = "C:/Users/Erawat"
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         for ($i=1; $i -le 360; $i++) {
             Start-Sleep -Seconds 60
             if ($i % 5 -eq 0) {
                 try {
-                    Write-Host "💾 Auto-saving your Personal PC storage state ($i / 360 min)..."
+                    Write-Host "Auto-saving Personal PC storage state ($i / 360 min)..."
                     Compress-Archive -Path "$userDir/Desktop","$userDir/Documents","$userDir/Downloads" -DestinationPath $stateZip -Force
                     gh release upload pc-state $stateZip --clobber 2>$null
                 } catch {}
@@ -219,13 +219,13 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
-        Write-Host "💾 Saving final Personal PC storage state before VM shutdown..."
+        Write-Host "Saving final Personal PC storage state before VM shutdown..."
         $userDir = "C:/Users/Erawat"
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         try {
             Compress-Archive -Path "$userDir/Desktop","$userDir/Documents","$userDir/Downloads" -DestinationPath $stateZip -Force
             gh release upload pc-state $stateZip --clobber 2>$null
-            Write-Host "✅ Personal PC state successfully saved to cloud persistent storage!"
+            Write-Host "Personal PC state successfully saved to cloud persistent storage!"
         } catch {}
 
         $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
