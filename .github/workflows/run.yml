@@ -158,12 +158,18 @@ jobs:
             $p = Join-Path "C:/Users/Erawat" $sub
             if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p -ErrorAction SilentlyContinue }
         }
-        Get-ChildItem -Path "C:/Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^erawat\." -or $_.Name -eq "runneradmin" } | ForEach-Object {
-            foreach ($sub in $subDirs) {
-                $target = Join-Path "C:/Users/Erawat" $sub
-                $link = Join-Path $_.FullName $sub
-                if (-not (Test-Path $link)) { cmd /c mklink /J "$link" "$target" }
+        Get-ChildItem -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" | ForEach-Object {
+            $path = $_.PSPath
+            $item = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+            if ($item.ProfileImagePath -and ($item.ProfileImagePath -match "(?i)erawat" -or $item.ProfileImagePath -match "(?i)runneradmin")) {
+                Set-ItemProperty -Path $path -Name "ProfileImagePath" -Value "C:\Users\Erawat" -ErrorAction SilentlyContinue
             }
+        }
+        Get-ChildItem -Path "C:/Users" -Force -ErrorAction SilentlyContinue | Where-Object { ($_.Name -match "^erawat\." -or $_.Name -eq "runneradmin") -and $_.Name -ne "Erawat" } | ForEach-Object {
+            takeown /F $_.FullName /R /D Y >$null 2>&1
+            icacls $_.FullName /grant "Administrators:F" /T /C /Q >$null 2>&1
+            Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $_.FullName) { cmd /c rmdir /s /q "$($_.FullName)" >$null 2>&1 }
         }
 
         $profileDir = "C:/Windows/System32/WindowsPowerShell/v1.0"
