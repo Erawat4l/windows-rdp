@@ -81,6 +81,9 @@ jobs:
         if (Test-Path $stateZip) {
             Write-Host "Restoring your Desktop, Documents, and Downloads..."
             Expand-Archive -Path $stateZip -DestinationPath $userDir -Force -ErrorAction SilentlyContinue
+            Get-ChildItem -Path "C:/Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^erawat\." } | ForEach-Object {
+                Expand-Archive -Path $stateZip -DestinationPath $_.FullName -Force -ErrorAction SilentlyContinue
+            }
             Write-Host "Personal PC state successfully restored!"
         }
         if (-not (Test-Path $stateZip)) {
@@ -239,14 +242,24 @@ jobs:
       shell: powershell
       run: |
         Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up Desktop, Documents, and Downloads..."
-        $userDir = "C:/Users/Erawat"
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         for ($i=1; $i -le 720; $i++) {
             Start-Sleep -Seconds 30
             try {
-                Write-Host "Auto-saving Personal PC storage state ($($i * 30) sec)..."
-                Compress-Archive -Path "$userDir/Desktop","$userDir/Documents","$userDir/Downloads" -DestinationPath $stateZip -Force
-                gh release upload pc-state $stateZip --clobber 2>$null
+                $erawatDirs = Get-ChildItem -Path "C:/Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "Erawat" -or $_.Name -match "^erawat\." }
+                $sourceDirs = @()
+                foreach ($d in $erawatDirs) {
+                    $dt = Join-Path $d.FullName "Desktop"
+                    $dc = Join-Path $d.FullName "Documents"
+                    $dw = Join-Path $d.FullName "Downloads"
+                    if (Test-Path $dt) { $sourceDirs += $dt }
+                    if (Test-Path $dc) { $sourceDirs += $dc }
+                    if (Test-Path $dw) { $sourceDirs += $dw }
+                }
+                if ($sourceDirs.Count -gt 0) {
+                    Compress-Archive -Path $sourceDirs -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
+                    gh release upload pc-state $stateZip --clobber 2>$null
+                }
             } catch {}
         }
 
@@ -257,12 +270,23 @@ jobs:
       shell: powershell
       run: |
         Write-Host "Saving final Personal PC storage state before VM shutdown..."
-        $userDir = "C:/Users/Erawat"
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         try {
-            Compress-Archive -Path "$userDir/Desktop","$userDir/Documents","$userDir/Downloads" -DestinationPath $stateZip -Force
-            gh release upload pc-state $stateZip --clobber 2>$null
-            Write-Host "Personal PC state successfully saved to cloud persistent storage!"
+            $erawatDirs = Get-ChildItem -Path "C:/Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "Erawat" -or $_.Name -match "^erawat\." }
+            $sourceDirs = @()
+            foreach ($d in $erawatDirs) {
+                $dt = Join-Path $d.FullName "Desktop"
+                $dc = Join-Path $d.FullName "Documents"
+                $dw = Join-Path $d.FullName "Downloads"
+                if (Test-Path $dt) { $sourceDirs += $dt }
+                if (Test-Path $dc) { $sourceDirs += $dc }
+                if (Test-Path $dw) { $sourceDirs += $dw }
+            }
+            if ($sourceDirs.Count -gt 0) {
+                Compress-Archive -Path $sourceDirs -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
+                gh release upload pc-state $stateZip --clobber 2>$null
+                Write-Host "Personal PC state successfully saved to cloud persistent storage!"
+            }
         } catch {}
 
         $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
