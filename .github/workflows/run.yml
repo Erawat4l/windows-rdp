@@ -72,10 +72,21 @@ jobs:
             
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            $sshdConfig = "$sshdDir\sshd_config"
-            if (Test-Path $sshdConfig) {
-                (Get-Content $sshdConfig) -replace '^Match Group administrators', '#Match Group administrators' -replace '^\s+AuthorizedKeysFile __PROGRAMDATA__', '#AuthorizedKeysFile __PROGRAMDATA__' | Set-Content $sshdConfig -Encoding ascii
-                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys" -Encoding ascii
+            $cleanSshdConfig = @"
+Port 22
+ListenAddress 0.0.0.0
+ListenAddress ::
+PermitRootLogin yes
+PasswordAuthentication yes
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+Subsystem sftp sftp-server.exe
+"@
+            [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
+
+            icacls.exe "$sshdDir" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" /grant "*S-1-5-32-545:R" 2>$null
+            Get-ChildItem -Path "$sshdDir\ssh_host_*" | ForEach-Object {
+                icacls.exe $_.FullName /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
             }
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
@@ -84,6 +95,7 @@ jobs:
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
                 $userKeys = "$userKeysDir\authorized_keys"
                 [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+                icacls.exe "$userKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" /grant "$Username`:F" 2>$null
 
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
@@ -95,9 +107,6 @@ jobs:
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShellCommandOption -Value "-NoLogo" -PropertyType String -Force
 
             Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
-            Start-Service sshd -ErrorAction SilentlyContinue
-            Restart-Service sshd -Force -ErrorAction SilentlyContinue
-            Start-Service sshd -ErrorAction SilentlyContinue
             Restart-Service sshd -Force -ErrorAction SilentlyContinue
         } catch {}
 
