@@ -59,6 +59,10 @@ jobs:
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
+        $runnerProfileDir = "C:\Users\runneradmin\Documents\WindowsPowerShell"
+        if (-not (Test-Path $runnerProfileDir)) { New-Item -ItemType Directory -Force -Path $runnerProfileDir }
+        Set-Content -Path "$runnerProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+
         # Disable Windows Firewall & Configure OpenSSH Server
         Write-Host "⚙️ Disabling Windows Firewall & Configuring OpenSSH Server..."
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
