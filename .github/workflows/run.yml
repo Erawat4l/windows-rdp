@@ -74,22 +74,9 @@ jobs:
 
             $sshdConfig = "$sshdDir\sshd_config"
             if (Test-Path $sshdConfig) {
-                $content = Get-Content $sshdConfig
-                $newContent = @()
-                $inMatch = $false
-                foreach ($line in $content) {
-                    if ($line -match '^Match Group administrators') {
-                        $inMatch = $true
-                        continue
-                    }
-                    if ($inMatch -and $line -match '^\s') {
-                        continue
-                    }
-                    $inMatch = $false
-                    $newContent += $line
-                }
-                $newContent -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes' | Set-Content $sshdConfig -Encoding ascii
-                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys" -Encoding ascii
+                $configContent = Get-Content $sshdConfig
+                $configContent = $configContent -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes'
+                Set-Content -Path $sshdConfig -Value $configContent -Encoding ascii
             }
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
@@ -98,13 +85,13 @@ jobs:
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
                 $userKeys = "$userKeysDir\authorized_keys"
                 [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                takeown.exe /F "$userKeys" 2>$null
-                icacls.exe "$userKeys" /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" /grant "$Username`:F" 2>$null
+                icacls.exe "$userKeysDir" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" /grant "$Username`:F" 2>$null
+                icacls.exe "$userKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" /grant "$Username`:F" 2>$null
 
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
                 takeown.exe /F "$adminKeys" /A 2>$null
-                icacls.exe "$adminKeys" /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
+                icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
