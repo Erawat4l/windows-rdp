@@ -23,7 +23,7 @@ jobs:
         SECRET_PASS: ${{ secrets.RDP_PASSWORD }}
       shell: powershell
       run: |
-        Write-Host "⚙️ Enabling Remote Desktop & OpenSSH..."
+        Write-Host "⚙️ Enabling Remote Desktop..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
@@ -72,7 +72,6 @@ jobs:
             
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            # Fix permissions on all host keys and sshd_config
             Get-ChildItem -Path "$sshdDir\ssh_host_*" | ForEach-Object {
                 takeown.exe /F $_.FullName /A 2>$null
                 icacls.exe $_.FullName /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
@@ -131,7 +130,7 @@ jobs:
             if (-not (Test-Path $tailscaleExe)) {
                 $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
             }
-            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="erardp"
+            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --hostname="erardp" --ssh
             Start-Sleep -Seconds 3
             $TsIp = (& $tailscaleExe ip -4).Trim()
         } catch {
