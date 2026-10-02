@@ -29,8 +29,8 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
-        $Username = if ($env:SECRET_USER -and $env:SECRET_USER -ne "") { $env:SECRET_USER } else { "Administrator" }
-        $Password = if ($env:SECRET_PASS -and $env:SECRET_PASS -ne "") { $env:SECRET_PASS } else { "@EraRDP0811#" }
+        $Username = "Administrator"
+        $Password = "@EraRDP0811#"
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
