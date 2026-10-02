@@ -30,19 +30,16 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
         $Username = "Administrator"
-        $Password = "@EraRDP0811#"
+        $Password = 'EraRDP2026Pass!'
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
-        net user Administrator "$Password" /active:yes
-        net localgroup Administrators Administrator /add
+        & net.exe user Administrator "$Password" /active:yes
+        & net.exe localgroup Administrators Administrator /add
 
-        if ($Username -ne "Administrator") {
-            try { Set-LocalUser -Name $Username -Password $SecPassword } catch {}
-            net user $Username "$Password" /add
-            net user $Username "$Password"
-            net localgroup Administrators $Username /add
-        }
+        try { Set-LocalUser -Name "runneradmin" -Password $SecPassword } catch {}
+        & net.exe user runneradmin "$Password"
+        & net.exe localgroup Administrators runneradmin /add
 
         # Rename Computer Hostname to EraRDP
         try {
