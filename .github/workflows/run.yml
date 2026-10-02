@@ -103,6 +103,8 @@ jobs:
 
         # Configure Remote Desktop & Firewall
         Write-Host "Enabling Remote Desktop & Configuring System..."
+        bcdedit /set testsigning off -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows' -Name 'DisplayNotSupported' -Value 0 -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
