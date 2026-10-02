@@ -126,7 +126,7 @@ jobs:
             if (-not (Test-Path $tailscaleExe)) {
                 $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
             }
-            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --ssh --hostname="erardp"
+            & $tailscaleExe up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes --ssh --hostname="erardp" --reset
             Start-Sleep -Seconds 3
             $TsIp = (& $tailscaleExe ip -4).Trim()
         } catch {
