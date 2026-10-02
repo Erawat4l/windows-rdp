@@ -76,7 +76,7 @@ jobs:
             if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir }
             & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-            $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe`r`n"
+            $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nStrictModes no`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe`r`n"
             [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
