@@ -64,13 +64,32 @@ jobs:
         Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
 
         try {
+            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue
             Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
             Start-Service sshd -ErrorAction SilentlyContinue
             
             $sshdDir = "C:\ProgramData\ssh"
+            if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir }
+            & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
+
             $sshdConfig = "$sshdDir\sshd_config"
             if (Test-Path $sshdConfig) {
-                (Get-Content $sshdConfig) -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes' -replace '^Match Group administrators', '#Match Group administrators' | Set-Content $sshdConfig -Encoding ascii
+                $content = Get-Content $sshdConfig
+                $newContent = @()
+                $inMatch = $false
+                foreach ($line in $content) {
+                    if ($line -match '^Match Group administrators') {
+                        $inMatch = $true
+                        continue
+                    }
+                    if ($inMatch -and $line -match '^\s') {
+                        continue
+                    }
+                    $inMatch = $false
+                    $newContent += $line
+                }
+                $newContent -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes' | Set-Content $sshdConfig -Encoding ascii
+                Add-Content -Path $sshdConfig -Value "`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys" -Encoding ascii
             }
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
@@ -79,6 +98,8 @@ jobs:
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
                 $userKeys = "$userKeysDir\authorized_keys"
                 [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+                takeown.exe /F "$userKeys" 2>$null
+                icacls.exe "$userKeys" /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" /grant "$Username`:F" 2>$null
 
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
