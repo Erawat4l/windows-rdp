@@ -51,7 +51,7 @@ jobs:
         } catch {}
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
-        $promptCode = "[System.Console]::Clear(); function prompt { `"Erawat@RDP `" + ((Get-Location).Path -replace 'runneradmin','erawat' -replace 'Administrator','erawat') + `"> `" }"
+        $promptCode = "try { [System.Console]::Clear() } catch {}; function prompt { `"Erawat@RDP `" + ((Get-Location).Path -replace 'runneradmin','erawat' -replace 'Administrator','erawat') + `"> `" }"
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
         Set-Content -Path "$profileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
