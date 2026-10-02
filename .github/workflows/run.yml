@@ -80,7 +80,6 @@ jobs:
 
         # Clean Desktop Clutter & Purge Preinstalled Runner Tool Clutter from C:\
         Remove-Item -Path "C:/Users/Public/Desktop/*" -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path "C:/Users/Erawat/Desktop/*" -Recurse -Force -ErrorAction SilentlyContinue
 
         $cleanItems = @(
             'C:/actionarchivecache', 'C:/Android', 'C:/azureCli', 'C:/azureDevOpsCli', 'C:/cobertura-2.1.1',
@@ -92,6 +91,19 @@ jobs:
         )
         foreach ($ci in $cleanItems) {
             if (Test-Path $ci) { Remove-Item -Path $ci -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+
+        # Apply Hidden + System attributes to runner and system directories
+        cmd.exe /c "attrib +h +s C:\actions-runner" 2>$null
+        cmd.exe /c "attrib +h +s C:\WindowsAzure" 2>$null
+        cmd.exe /c "attrib +h +s C:\Users\runneradmin" 2>$null
+        cmd.exe /c "attrib +h +s C:\Users\Public" 2>$null
+
+        Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.Name -match "^erawat\.") {
+                $n = $_.Name
+                cmd.exe /c "attrib +h +s ""C:\Users\$n""" 2>$null
+            }
         }
 
         # Rename Computer Hostname to EraRDP
@@ -123,7 +135,7 @@ jobs:
         }
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat> and Unix ls/ll aliases
-        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }; function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l); if ($a -or $la) { Get-ChildItem -Path $Path -Force -ErrorAction SilentlyContinue } else { Get-ChildItem -Path $Path -ErrorAction SilentlyContinue } }; function ll { Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue }'
+        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }; function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l, [switch]$Force); $items = Get-ChildItem -Path $Path -ErrorAction SilentlyContinue; if (-not $Force -and -not $a -and -not $la) { $exclude = @("actions-runner", "WindowsAzure", "inetpub", "PSModuleAnalysisCachePath", "runneradmin", "Public"); $items = $items | Where-Object { $exclude -notcontains $_.Name -and $_.Name -notmatch "(?i)^erawat\." } }; return $items }; function ll { ls -a }'
 
         $profileDir = "C:/Windows/System32/WindowsPowerShell/v1.0"
         if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
