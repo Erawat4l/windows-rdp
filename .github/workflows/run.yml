@@ -71,7 +71,8 @@ jobs:
             Write-Host "🔄 Restoring your Desktop, Documents, and Downloads..."
             Expand-Archive -Path "$env:TEMP\erawat_pc_state.zip" -DestinationPath "$userDir" -Force -ErrorAction SilentlyContinue
             Write-Host "✅ Personal PC state successfully restored!"
-        } else {
+        }
+        if (-not (Test-Path "$env:TEMP\erawat_pc_state.zip")) {
             Write-Host "ℹ️ Fresh Personal PC storage initialized."
         }
 
