@@ -238,7 +238,9 @@ jobs:
         }
 
         Write-Host "Installing Tailscale..."
-        choco install tailscale -y --no-progress
+        $tsMsi = "$env:TEMP/tailscale.msi"
+        curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -o $tsMsi
+        Start-Process msiexec.exe -ArgumentList "/i `"$tsMsi`" /qn /norestart" -Wait
         $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
         if (-not (Test-Path $tailscaleExe)) {
             $tailscaleExe = "C:/Program Files (x86)/Tailscale/tailscale.exe"
