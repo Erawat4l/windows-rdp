@@ -23,6 +23,7 @@ jobs:
         SECRET_PASS: ${{ secrets.RDP_PASSWORD }}
       shell: powershell
       run: |
+        $ErrorActionPreference = 'SilentlyContinue'
         Write-Host "⚙️ Enabling Remote Desktop..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
@@ -34,13 +35,13 @@ jobs:
 
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
         net user Administrator "$Password" /active:yes
-        net localgroup Administrators Administrator /add 2>$null
+        net localgroup Administrators Administrator /add
 
         if ($Username -ne "Administrator") {
             try { Set-LocalUser -Name $Username -Password $SecPassword } catch {}
-            net user $Username "$Password" /add 2>$null
-            net user $Username "$Password" 2>$null
-            net localgroup Administrators $Username /add 2>$null
+            net user $Username "$Password" /add
+            net user $Username "$Password"
+            net localgroup Administrators $Username /add
         }
 
         # Rename Computer Hostname to EraRDP
@@ -83,15 +84,15 @@ jobs:
             if ($pubKey -and $pubKey -ne "") {
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                takeown.exe /F "$adminKeys" /A 2>$null
-                icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
+                takeown.exe /F "$adminKeys" /A
+                icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
 
                 $userKeysDir = "C:\Users\Administrator\.ssh"
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
                 $userKeys = "$userKeysDir\authorized_keys"
                 [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                icacls.exe "$userKeysDir" /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
-                icacls.exe "$userKeys" /inheritance:r /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
+                icacls.exe "$userKeysDir" /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
+                icacls.exe "$userKeys" /inheritance:r /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
@@ -138,9 +139,9 @@ jobs:
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: Administrator`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
-            gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock" 2>$null
+            gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
         } catch {}
-        $global:LASTEXITCODE = 0
+        exit 0
 
     - name: Keep Alive Loop
       shell: powershell
