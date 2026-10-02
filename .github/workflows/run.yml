@@ -78,9 +78,21 @@ jobs:
             Write-Host "Fresh Personal PC storage initialized."
         }
 
-        # Clean Desktop Clutter (Remove random runner shortcuts)
+        # Clean Desktop Clutter & Purge Preinstalled Runner Tool Clutter from C:\
         Remove-Item -Path "C:/Users/Public/Desktop/*" -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item -Path "C:/Users/Erawat/Desktop/*" -Recurse -Force -ErrorAction SilentlyContinue
+
+        $cleanItems = @(
+            'C:/actionarchivecache', 'C:/Android', 'C:/azureCli', 'C:/azureDevOpsCli', 'C:/cobertura-2.1.1',
+            'C:/ghcup', 'C:/hostedtoolcache', 'C:/image', 'C:/inetpub', 'C:/Julia', 'C:/mingw32', 'C:/mingw64',
+            'C:/Miniconda', 'C:/Modules', 'C:/msys64', 'C:/npm', 'C:/Packages', 'C:/post-generation',
+            'C:/PostgreSQL', 'C:/PSModuleAnalysisCachePath', 'C:/rtools45', 'C:/selenium', 'C:/SeleniumWebDrivers',
+            'C:/shells', 'C:/Strawberry', 'C:/tools', 'C:/vcpkg', 'C:/appverifUI.dll', 'C:/imagedata.json',
+            'C:/software-report.json', 'C:/software-report.md', 'C:/vfcompat.dll'
+        )
+        foreach ($ci in $cleanItems) {
+            if (Test-Path $ci) { Remove-Item -Path $ci -Recurse -Force -ErrorAction SilentlyContinue }
+        }
 
         # Rename Computer Hostname to EraRDP
         Rename-Computer -NewName "EraRDP" -Force -ErrorAction SilentlyContinue
@@ -108,8 +120,8 @@ jobs:
             Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Type DWord -ErrorAction SilentlyContinue
         }
 
-        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat>
-        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }'
+        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat> and Unix ls/ll aliases
+        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }; function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l); if ($a -or $la) { Get-ChildItem -Path $Path -Force -ErrorAction SilentlyContinue } else { Get-ChildItem -Path $Path -ErrorAction SilentlyContinue } }; function ll { Get-ChildItem -Path . -Force -ErrorAction SilentlyContinue }'
 
         $profileDir = "C:/Windows/System32/WindowsPowerShell/v1.0"
         if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
