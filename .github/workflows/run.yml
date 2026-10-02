@@ -58,26 +58,20 @@ jobs:
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        # Disable Windows Firewall inside VM & Install Official OpenSSH Server via Chocolatey
-        Write-Host "⚙️ Disabling Windows Firewall & Installing OpenSSH Server..."
+        # Disable Windows Firewall & Configure OpenSSH Server
+        Write-Host "⚙️ Disabling Windows Firewall & Configuring OpenSSH Server..."
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
+        Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
 
         try {
-            choco install openssh -y
-            $sshPath = "C:\Program Files\OpenSSH-Win64"
-            if (-not (Test-Path $sshPath)) { $sshPath = "C:\Program Files\OpenSSH" }
+            Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
+            Start-Service sshd -ErrorAction SilentlyContinue
             
-            if (Test-Path "$sshPath\install-sshd.ps1") {
-                & "$sshPath\install-sshd.ps1"
+            $sshdDir = "C:\ProgramData\ssh"
+            $sshdConfig = "$sshdDir\sshd_config"
+            if (Test-Path $sshdConfig) {
+                (Get-Content $sshdConfig) -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes' -replace '^Match Group administrators', '#Match Group administrators' | Set-Content $sshdConfig -Encoding ascii
             }
-            
-            & "$sshPath\ssh-keygen.exe" -A 2>$null
-
-            $sshdConfig = "$sshPath\sshd_config"
-            if (-not (Test-Path $sshdConfig)) { $sshdConfig = "C:\ProgramData\ssh\sshd_config" }
-
-            $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe`r`n"
-            [System.IO.File]::WriteAllText($sshdConfig, $cleanSshdConfig, [System.Text.Encoding]::ASCII)
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
             if ($pubKey -and $pubKey -ne "") {
@@ -86,21 +80,16 @@ jobs:
                 $userKeys = "$userKeysDir\authorized_keys"
                 [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
 
-                $adminKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
-                if (Test-Path "C:\ProgramData\ssh") {
-                    [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                }
-            }
-
-            if (Test-Path "$sshPath\FixHostFilePermissions.ps1") {
-                & "$sshPath\FixHostFilePermissions.ps1" -Confirm:$false 2>$null
+                $adminKeys = "$sshdDir\administrators_authorized_keys"
+                [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+                takeown.exe /F "$adminKeys" /A 2>$null
+                icacls.exe "$adminKeys" /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" 2>$null
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force
             Set-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShellCommandOption -Value "-NoLogo" -PropertyType String -Force
 
-            Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
             Restart-Service sshd -Force -ErrorAction SilentlyContinue
         } catch {}
 
