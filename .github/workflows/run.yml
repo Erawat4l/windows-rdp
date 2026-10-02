@@ -29,17 +29,23 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
-        $Username = "Administrator"
-        $Password = 'EraRDP2026Pass!'
+        $Username = if ("${{ secrets.RDP_USERNAME }}" -and "${{ secrets.RDP_USERNAME }}" -ne "") { "${{ secrets.RDP_USERNAME }}" } else { "Erawat" }
+        $Password = if ("${{ secrets.RDP_PASSWORD }}" -and "${{ secrets.RDP_PASSWORD }}" -ne "") { "${{ secrets.RDP_PASSWORD }}" } else { '@EraRDP0811#' }
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
+        try { New-LocalUser -Name "Erawat" -Password $SecPassword -FullName "Erawat" -Description "Main RDP User"; Enable-LocalUser -Name "Erawat" } catch {}
+        try { Set-LocalUser -Name "Erawat" -Password $SecPassword; Enable-LocalUser -Name "Erawat" } catch {}
+        & net.exe user Erawat "$Password" /add /active:yes 2>$null
+        & net.exe user Erawat "$Password" 2>$null
+        & net.exe localgroup Administrators Erawat /add 2>$null
+
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
-        & net.exe user Administrator "$Password" /active:yes
-        & net.exe localgroup Administrators Administrator /add
+        & net.exe user Administrator "$Password" /active:yes 2>$null
+        & net.exe localgroup Administrators Administrator /add 2>$null
 
         try { Set-LocalUser -Name "runneradmin" -Password $SecPassword } catch {}
-        & net.exe user runneradmin "$Password"
-        & net.exe localgroup Administrators runneradmin /add
+        & net.exe user runneradmin "$Password" 2>$null
+        & net.exe localgroup Administrators runneradmin /add 2>$null
 
         # Rename Computer Hostname to EraRDP
         try {
@@ -154,9 +160,9 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: Administrator`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: Erawat`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
         Write-Host $InfoBlock
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: Administrator`n- **Password**: $Password`n- **Port**: 3389"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: Erawat`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock"
