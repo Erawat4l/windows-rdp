@@ -69,6 +69,20 @@ jobs:
         Set-Content -Path "$runnerProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
 
+        
+        # Optimize Windows Network Stack & TCP Latency (Disable Nagle Algorithm & Network Throttling)
+        try {
+            $sysProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
+            if (-not (Test-Path $sysProfile)) { New-Item -Path $sysProfile -Force }
+            Set-ItemProperty -Path $sysProfile -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $sysProfile -Name "SystemResponsiveness" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+            Get-ChildItem -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" | ForEach-Object {
+                Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            }
+        } catch {}
+
         # Disable Windows Firewall & Configure OpenSSH Server
         Write-Host "⚙️ Disabling Windows Firewall & Configuring OpenSSH Server..."
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
