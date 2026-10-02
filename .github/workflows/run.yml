@@ -28,17 +28,20 @@ jobs:
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1 -ErrorAction SilentlyContinue
 
-        $Username = if ($env:SECRET_USER -and $env:SECRET_USER -ne "") { $env:SECRET_USER } else { "Erawat" }
+        $Username = if ($env:SECRET_USER -and $env:SECRET_USER -ne "") { $env:SECRET_USER } else { "Administrator" }
         $Password = if ($env:SECRET_PASS -and $env:SECRET_PASS -ne "") { $env:SECRET_PASS } else { "@EraRDP0811#" }
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
-        try { Set-LocalUser -Name $Username -Password $SecPassword } catch {}
-        net user $Username "$Password" /add
-        net user $Username "$Password"
-        net localgroup Administrators $Username /add
-
         try { Set-LocalUser -Name "Administrator" -Password $SecPassword; Enable-LocalUser -Name "Administrator" } catch {}
         net user Administrator "$Password" /active:yes
+        net localgroup Administrators Administrator /add 2>$null
+
+        if ($Username -ne "Administrator") {
+            try { Set-LocalUser -Name $Username -Password $SecPassword } catch {}
+            net user $Username "$Password" /add 2>$null
+            net user $Username "$Password" 2>$null
+            net localgroup Administrators $Username /add 2>$null
+        }
 
         # Rename Computer Hostname to EraRDP
         try {
@@ -50,11 +53,11 @@ jobs:
         } catch {}
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\erawat>
-        $promptCode = "Clear-Host`nfunction prompt { `"$Username@RDP `" + (Get-Location).Path + `"> `" }"
+        $promptCode = "Clear-Host`nfunction prompt { `"Erawat@RDP `" + (Get-Location).Path + `"> `" }"
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
         Set-Content -Path "$profileDir\profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        $userProfileDir = "C:\Users\$Username\Documents\WindowsPowerShell"
+        $userProfileDir = "C:\Users\Administrator\Documents\WindowsPowerShell"
         if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir }
         Set-Content -Path "$userProfileDir\Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
@@ -86,15 +89,17 @@ jobs:
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
             if ($pubKey -and $pubKey -ne "") {
-                $userKeysDir = "C:\Users\$Username\.ssh"
-                if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
-                $userKeys = "$userKeysDir\authorized_keys"
-                [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
                 takeown.exe /F "$adminKeys" /A 2>$null
                 icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
+
+                $userKeysDir = "C:\Users\Administrator\.ssh"
+                if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
+                $userKeys = "$userKeysDir\authorized_keys"
+                [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
+                icacls.exe "$userKeysDir" /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
+                icacls.exe "$userKeys" /inheritance:r /grant "Administrator:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
             }
 
             if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force }
@@ -136,9 +141,9 @@ jobs:
             $TsIp = "Tailscale Offline"
         }
 
-        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: $Username`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
+        $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: Administrator`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
         Write-Host $InfoBlock
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: $Username`n- **Password**: $Password`n- **Port**: 3389"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### High-Speed RDP Details`n- **Cloudflare Tunnel**: $cfUrl`n- **Tailscale IP**: $TsIp`n- **Username**: Administrator`n- **Password**: $Password`n- **Port**: 3389"
 
         try {
             gh api "/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/comments" -f body="$InfoBlock" 2>$null
