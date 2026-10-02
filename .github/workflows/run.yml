@@ -109,7 +109,7 @@ jobs:
         }
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat>
-        $promptCode = 'function prompt { "Erawat@RDP " + (Get-Location).Path + "> " }'
+        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }'
 
         $profileDir = "C:/Windows/System32/WindowsPowerShell/v1.0"
         if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
