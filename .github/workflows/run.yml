@@ -106,7 +106,7 @@ jobs:
         }
 
         # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat>
-        $promptCode = '$esc = [char]27; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { "Erawat@RDP " + ((Get-Location).Path -replace "runneradmin","erawat" -replace "Administrator","erawat") + "> " }'
+        $promptCode = 'function prompt { "Erawat@RDP " + (Get-Location).Path + "> " }'
 
         $profileDir = "C:\Windows\System32\WindowsPowerShell\v1.0"
         if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
@@ -132,8 +132,7 @@ jobs:
         if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir -ErrorAction SilentlyContinue }
         & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
 
-        $cleanSshdConfig = "Port 22`r`nListenAddress 0.0.0.0`r`nListenAddress ::`r`nStrictModes no`r`nPermitRootLogin yes`r`nPasswordAuthentication yes`r`nPubkeyAuthentication yes`r`nUseDNS no`r`nGSSAPIAuthentication no`r`nAuthorizedKeysFile .ssh/authorized_keys`r`nSubsystem sftp sftp-server.exe`r`n"
-        [System.IO.File]::WriteAllText("$sshdDir\sshd_config", $cleanSshdConfig, [System.Text.Encoding]::ASCII)
+        @("Port 22", "ListenAddress 0.0.0.0", "ListenAddress ::", "StrictModes no", "PermitRootLogin yes", "PasswordAuthentication yes", "PubkeyAuthentication yes", "UseDNS no", "GSSAPIAuthentication no", "AuthorizedKeysFile .ssh/authorized_keys", "Subsystem sftp sftp-server.exe") | Set-Content "$sshdDir\sshd_config"
 
         $pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost"
         if ($env:SECRET_PUBKEY -and $env:SECRET_PUBKEY -ne "") { $pubKey = $env:SECRET_PUBKEY }
