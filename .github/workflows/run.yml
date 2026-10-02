@@ -219,8 +219,7 @@ jobs:
         }
 
         Write-Host "Installing Tailscale..."
-        curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o "$env:TEMP/ts-setup.exe"
-        Start-Process "$env:TEMP/ts-setup.exe" -ArgumentList "/verysilent /norestart" -Wait
+        choco install tailscale -y --no-progress
         $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
         if (-not (Test-Path $tailscaleExe)) {
             $tailscaleExe = "C:/Program Files (x86)/Tailscale/tailscale.exe"
