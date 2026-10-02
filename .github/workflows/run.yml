@@ -150,8 +150,21 @@ jobs:
             Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Type DWord -ErrorAction SilentlyContinue
         }
 
-        # Set custom PowerShell prompt to display Erawat@RDP C:\Users\Erawat> and Unix ls/ll aliases
-        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; Write-Host "$($esc)[2J$($esc)[3J$($esc)[H" -NoNewline; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }; function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l, [switch]$Force); $items = Get-ChildItem -Path $Path -ErrorAction SilentlyContinue; if (-not $Force -and -not $a -and -not $la) { $exclude = @("actions-runner", "WindowsAzure", "inetpub", "PSModuleAnalysisCachePath", "runneradmin", "Public", "Temp"); $items = $items | Where-Object { $n = $_.Name; if ($exclude -contains $n -or $n -like "erawat.*") { return $false }; return $true } }; return $items }; function ll { ls -a }'
+        # Set custom PowerShell prompt & profile unification
+        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; $erawatMain = "C:\Users\Erawat"; $curr = (Get-Location).Path; if ($curr -match "(?i)erawat\.[a-z0-9_-]+" -or $curr -eq "C:\Users\runneradmin") { Set-Location $erawatMain -ErrorAction SilentlyContinue }; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }; function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l, [switch]$Force); $items = Get-ChildItem -Path $Path -ErrorAction SilentlyContinue; if (-not $Force -and -not $a -and -not $la) { $exclude = @("actions-runner", "WindowsAzure", "inetpub", "PSModuleAnalysisCachePath", "runneradmin", "Public", "Temp"); $items = $items | Where-Object { $n = $_.Name; if ($exclude -contains $n -or $n -like "erawat.*") { return $false }; return $true } }; if ($items) { $items | Select-Object Mode, @{N="LastWriteTime";E={$_.LastWriteTime.ToString("M/d/yyyy  h:mm tt")}}, @{N="Length";E={if($_.Length){$_.Length}else{""}}}, Name | Format-Table -AutoSize } }; function ll { ls -a }'
+
+        $subDirs = @("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")
+        foreach ($sub in $subDirs) {
+            $p = Join-Path "C:/Users/Erawat" $sub
+            if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p -ErrorAction SilentlyContinue }
+        }
+        Get-ChildItem -Path "C:/Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^erawat\." -or $_.Name -eq "runneradmin" } | ForEach-Object {
+            foreach ($sub in $subDirs) {
+                $target = Join-Path "C:/Users/Erawat" $sub
+                $link = Join-Path $_.FullName $sub
+                if (-not (Test-Path $link)) { cmd /c mklink /J "$link" "$target" }
+            }
+        }
 
         $profileDir = "C:/Windows/System32/WindowsPowerShell/v1.0"
         if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
