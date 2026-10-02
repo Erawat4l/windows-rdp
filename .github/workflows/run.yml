@@ -36,12 +36,21 @@ jobs:
 
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
-        # Create Primary User: Erawat
+        # Create Primary User: Erawat & Force ProfileImagePath to C:\Users\Erawat
         New-LocalUser -Name "Erawat" -Password $SecPassword -FullName "Erawat" -Description "Personal PC Owner" -ErrorAction SilentlyContinue
         Set-LocalUser -Name "Erawat" -Password $SecPassword -ErrorAction SilentlyContinue
         Enable-LocalUser -Name "Erawat" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "Erawat" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Erawat" -ErrorAction SilentlyContinue
+
+        try {
+            $userSid = (Get-LocalUser -Name "Erawat").SID.Value
+            if ($userSid) {
+                $pKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$userSid"
+                if (-not (Test-Path $pKey)) { New-Item -Path $pKey -Force -ErrorAction SilentlyContinue }
+                Set-ItemProperty -Path $pKey -Name "ProfileImagePath" -Value "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue
+            }
+        } catch {}
 
         # Hide extra runner accounts from Windows Login screen (Only Erawat visible)
         $userListPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
@@ -213,7 +222,7 @@ jobs:
         if (-not (Test-Path $tailscaleExe)) {
             $tailscaleExe = "C:/Program Files (x86)/Tailscale/tailscale.exe"
         }
-        & $tailscaleExe up --authkey="$env:TAILSCALE_AUTHKEY" --accept-routes --hostname="erardp"
+        & $tailscaleExe up --authkey="$env:TAILSCALE_AUTHKEY" --accept-routes --hostname="erardp" --reset
         Start-Sleep -Seconds 3
         $TsIp = (& $tailscaleExe ip -4).Trim()
 
@@ -232,15 +241,13 @@ jobs:
         Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up Desktop, Documents, and Downloads..."
         $userDir = "C:/Users/Erawat"
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
-        for ($i=1; $i -le 360; $i++) {
-            Start-Sleep -Seconds 60
-            if ($i % 5 -eq 0) {
-                try {
-                    Write-Host "Auto-saving Personal PC storage state ($i / 360 min)..."
-                    Compress-Archive -Path "$userDir/Desktop","$userDir/Documents","$userDir/Downloads" -DestinationPath $stateZip -Force
-                    gh release upload pc-state $stateZip --clobber 2>$null
-                } catch {}
-            }
+        for ($i=1; $i -le 720; $i++) {
+            Start-Sleep -Seconds 30
+            try {
+                Write-Host "Auto-saving Personal PC storage state ($($i * 30) sec)..."
+                Compress-Archive -Path "$userDir/Desktop","$userDir/Documents","$userDir/Downloads" -DestinationPath $stateZip -Force
+                gh release upload pc-state $stateZip --clobber 2>$null
+            } catch {}
         }
 
     - name: Final Save & Remove from Tailscale
