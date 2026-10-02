@@ -74,9 +74,14 @@ jobs:
 
             $sshdConfig = "$sshdDir\sshd_config"
             if (Test-Path $sshdConfig) {
-                $configContent = Get-Content $sshdConfig
-                $configContent = $configContent -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' -replace 'PasswordAuthentication no', 'PasswordAuthentication yes' -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes'
-                Set-Content -Path $sshdConfig -Value $configContent -Encoding ascii
+                $configText = Get-Content $sshdConfig -Raw
+                $configText = $configText -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes'
+                $configText = $configText -replace 'PasswordAuthentication no', 'PasswordAuthentication yes'
+                $configText = $configText -replace '#PubkeyAuthentication yes', 'PubkeyAuthentication yes'
+                if ($configText -match 'Match Group administrators') {
+                    $configText = $configText -replace 'Match Group administrators', "Match Group administrators`r`n       PasswordAuthentication yes`r`n       PubkeyAuthentication yes"
+                }
+                [System.IO.File]::WriteAllText($sshdConfig, $configText, [System.Text.Encoding]::ASCII)
             }
 
             $pubKey = if ("${{ secrets.SSH_PUBKEY }}" -and "${{ secrets.SSH_PUBKEY }}" -ne "") { "${{ secrets.SSH_PUBKEY }}" } else { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost" }
@@ -85,8 +90,6 @@ jobs:
                 if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir }
                 $userKeys = "$userKeysDir\authorized_keys"
                 [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
-                icacls.exe "$userKeysDir" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" /grant "$Username`:F" 2>$null
-                icacls.exe "$userKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" /grant "$Username`:F" 2>$null
 
                 $adminKeys = "$sshdDir\administrators_authorized_keys"
                 [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
