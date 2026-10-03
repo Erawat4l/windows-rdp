@@ -174,17 +174,22 @@ jobs:
 
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        # Dynamic Tailscale Auth Key Generation via curl.exe
+        # Dynamic Tailscale Auth Key Generation via curl.exe and payload files
         $tsKey = $env:TAILSCALE_AUTHKEY
         if (-not $tsKey -or $tsKey -eq "") {
             try {
-                $tokRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/oauth/token" -d "grant_type=client_credentials" -d "client_id=kPnFqAw4u711CNTRL" -d "client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
+                $tokPayload = "$env:TEMP/tok_payload.txt"
+                "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad" | Set-Content $tokPayload
+
+                $tokRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/oauth/token" -H "Content-Type: application/x-www-form-urlencoded" -d "@$tokPayload"
                 $tokObj = $tokRaw | ConvertFrom-Json
                 $accToken = $tokObj.access_token
 
                 if ($accToken) {
-                    $kp = '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:rdp"]}}},"expirySeconds":7776000}'
-                    $kRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" -H "Authorization: Bearer $accToken" -H "Content-Type: application/json" -d $kp
+                    $keyPayloadFile = "$env:TEMP/key_payload.json"
+                    '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:rdp"]}}},"expirySeconds":7776000}' | Set-Content $keyPayloadFile
+
+                    $kRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" -H "Authorization: Bearer $accToken" -H "Content-Type: application/json" -d "@$keyPayloadFile"
                     $kObj = $kRaw | ConvertFrom-Json
                     if ($kObj.key) { $tsKey = $kObj.key }
                 }
