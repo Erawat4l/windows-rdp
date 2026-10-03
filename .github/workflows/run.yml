@@ -94,17 +94,12 @@ jobs:
         try {
             & gh release download pc-state --pattern "erawat_pc_state.zip" --dir "$env:TEMP" --clobber 2>$null
             if (Test-Path $stateZip) {
-                Write-Host "Restoring your Personal PC files..."
+                Write-Host "Restoring your Personal PC files & credentials..."
                 Expand-Archive -Path $stateZip -DestinationPath $userDir -Force -ErrorAction SilentlyContinue
 
-                # Auto-generate start.bat inside any Minecraft server folders
-                Get-ChildItem -Path "$userDir" -Recurse -Filter "*MinecraftServer*" -ErrorAction SilentlyContinue | ForEach-Object {
-                    if ($_.PSIsContainer) {
-                        $mcDir = $_.FullName
-                        $batPath = Join-Path $mcDir "start.bat"
-                        $batCode = "@echo off`r`ntitle Minecraft Server`r`necho Starting Minecraft Paper Server...`r`ncd /d `"%~dp0minecraft-server`"`r`njava -Xmx4G -Xms2G -jar `"..\\versions\\1.21.11\\paper-1.21.11.jar`" nogui`r`npause"
-                        Set-Content -Path $batPath -Value $batCode -Force -ErrorAction SilentlyContinue
-                    }
+                # Also expand to any dynamic profile directory created by Windows
+                Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
+                    Expand-Archive -Path $stateZip -DestinationPath $_.FullName -Force -ErrorAction SilentlyContinue
                 }
             }
         } catch {}
@@ -282,25 +277,23 @@ jobs:
     - name: Keep Alive & Auto-Save Personal PC Storage Loop
       shell: powershell
       run: |
-        Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up your Personal PC files..."
+        Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up your Personal PC files & logins..."
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         for ($i=1; $i -le 2160; $i++) {
             Start-Sleep -Seconds 10
             try {
-                # Auto-sync any dynamic profile directory (Erawat.* or TEMP) into C:\Users\Erawat
-                Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "Erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
-                    $dynPath = $_.FullName
-                    if (-not (Get-Item $dynPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
-                        Get-ChildItem -Path $dynPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                            $dest = Join-Path "C:\Users\Erawat" $_.Name
-                            if (-not (Test-Path $dest)) {
-                                Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
-                            }
-                        }
-                    }
+                # Find active user profile directory
+                $targetProf = "C:\Users\Erawat"
+                $dynProf = Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" } | Select-Object -First 1
+                if ($dynProf) { $targetProf = $dynProf.FullName }
+
+                # Mirror changes between C:\Users\Erawat and active dynamic profile
+                if ($targetProf -ne "C:\Users\Erawat" -and (Test-Path "C:\Users\Erawat")) {
+                    Copy-Item -Path "C:\Users\Erawat\*" -Destination $targetProf -Recurse -Force -ErrorAction SilentlyContinue
+                    Copy-Item -Path "$targetProf\*" -Destination "C:\Users\Erawat" -Recurse -Force -ErrorAction SilentlyContinue
                 }
 
-                $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
+                $itemsToSave = Get-ChildItem -Path $targetProf -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' }
                 if ($itemsToSave) {
                     Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
                     gh release upload pc-state $stateZip --clobber 2>$null
@@ -314,22 +307,19 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: powershell
       run: |
-        Write-Host "Saving final Personal PC storage state before VM shutdown..."
+        Write-Host "Saving final Personal PC storage state & logins before VM shutdown..."
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         try {
-            Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "Erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
-                $dynPath = $_.FullName
-                if (-not (Get-Item $dynPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
-                    Get-ChildItem -Path $dynPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                        $dest = Join-Path "C:\Users\Erawat" $_.Name
-                        if (-not (Test-Path $dest)) {
-                            Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
-                        }
-                    }
-                }
+            $targetProf = "C:\Users\Erawat"
+            $dynProf = Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" } | Select-Object -First 1
+            if ($dynProf) { $targetProf = $dynProf.FullName }
+
+            if ($targetProf -ne "C:\Users\Erawat" -and (Test-Path "C:\Users\Erawat")) {
+                Copy-Item -Path "C:\Users\Erawat\*" -Destination $targetProf -Recurse -Force -ErrorAction SilentlyContinue
+                Copy-Item -Path "$targetProf\*" -Destination "C:\Users\Erawat" -Recurse -Force -ErrorAction SilentlyContinue
             }
 
-            $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
+            $itemsToSave = Get-ChildItem -Path $targetProf -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' }
             if ($itemsToSave) {
                 Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
                 gh release upload pc-state $stateZip --clobber 2>$null
