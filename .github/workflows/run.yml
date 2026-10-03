@@ -149,14 +149,24 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
 
-        # Enable RDP & Remove Desktop Watermark
-        Write-Host "Enabling Remote Desktop..."
+        # Enable RDP & Fix Black Screen on Headless Cloud VMs
+        Write-Host "Enabling Remote Desktop and Display Rendering..."
         bcdedit /set testsigning off -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows' -Name 'DisplayNotSupported' -Value 0 -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name 'PaintDesktopVersion' -Value 0 -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
+
+        # FIX RDP BLACK SCREEN: Disable WDDM graphics driver on headless VM to force software display rendering
+        $tsPolicyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+        if (-not (Test-Path $tsPolicyKey)) { New-Item -Path $tsPolicyKey -Force -ErrorAction SilentlyContinue }
+        Set-ItemProperty -Path $tsPolicyKey -Name "fEnableWddmDriver" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+
+        $rdpTcpKey = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+        Set-ItemProperty -Path $rdpTcpKey -Name "fEnableWddmDriver" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $rdpTcpKey -Name "fInheritColorDepth" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $rdpTcpKey -Name "ColorDepth" -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
 
         # Fast Network Latency Tweaks
         $sysProfile = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
