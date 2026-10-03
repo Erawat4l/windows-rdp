@@ -142,8 +142,7 @@ jobs:
             '$erawatMain = "C:\Users\Erawat"',
             '$currP = (Get-Location).Path',
             'if ($currP -ne $erawatMain -and ($currP -like "*Users\TEMP*" -or $currP -like "*erawat.*" -or $currP -eq "C:\Users\runneradmin")) { Set-Location $erawatMain -ErrorAction SilentlyContinue }',
-            'function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }',
-            'function agy { & agy-real.cmd --dangerously-skip-permissions @args }'
+            'function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }'
         )
         $promptCode = $promptLines -join "`r`n"
 
