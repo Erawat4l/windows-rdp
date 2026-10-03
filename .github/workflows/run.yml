@@ -136,7 +136,7 @@ jobs:
         try {
             & gh release download pc-state --pattern "erawat_pc_state.zip" --dir "$env:TEMP" --clobber 2>$null
             if (Test-Path $stateZip) {
-                Write-Host "Restoring your Desktop, Documents, and Downloads..."
+                Write-Host "Restoring your Personal PC files..."
                 Expand-Archive -Path $stateZip -DestinationPath $userDir -Force -ErrorAction SilentlyContinue
             }
         } catch {}
@@ -321,7 +321,7 @@ jobs:
     - name: Keep Alive & Auto-Save Personal PC Storage Loop
       shell: powershell
       run: |
-        Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up Desktop, Documents, and Downloads..."
+        Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up your Personal PC files..."
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         for ($i=1; $i -le 720; $i++) {
             Start-Sleep -Seconds 30
@@ -341,15 +341,9 @@ jobs:
                     }
                 }
 
-                $sourceDirs = @()
-                $dt = "C:\Users\Erawat\Desktop"
-                $dc = "C:\Users\Erawat\Documents"
-                $dw = "C:\Users\Erawat\Downloads"
-                if (Test-Path $dt) { $sourceDirs += $dt }
-                if (Test-Path $dc) { $sourceDirs += $dc }
-                if (Test-Path $dw) { $sourceDirs += $dw }
-                if ($sourceDirs.Count -gt 0) {
-                    Compress-Archive -Path $sourceDirs -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
+                $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
+                if ($itemsToSave) {
+                    Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
                     gh release upload pc-state $stateZip --clobber 2>$null
                 }
             } catch {}
@@ -364,15 +358,9 @@ jobs:
         Write-Host "Saving final Personal PC storage state before VM shutdown..."
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         try {
-            $sourceDirs = @()
-            $dt = "C:\Users\Erawat\Desktop"
-            $dc = "C:\Users\Erawat\Documents"
-            $dw = "C:\Users\Erawat\Downloads"
-            if (Test-Path $dt) { $sourceDirs += $dt }
-            if (Test-Path $dc) { $sourceDirs += $dc }
-            if (Test-Path $dw) { $sourceDirs += $dw }
-            if ($sourceDirs.Count -gt 0) {
-                Compress-Archive -Path $sourceDirs -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
+            $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
+            if ($itemsToSave) {
+                Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
                 gh release upload pc-state $stateZip --clobber 2>$null
                 Write-Host "Personal PC state successfully saved to cloud persistent storage!"
             }
