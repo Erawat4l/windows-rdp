@@ -106,28 +106,18 @@ jobs:
 
         # Install Antigravity CLI & configure agy wrapper with --dangerously-skip-permissions
         Write-Host "Pre-installing Antigravity CLI..."
-        npm install -g @google/antigravity-cli --no-progress 2>$null
-        $npmDir = (Get-Command npm -ErrorAction SilentlyContinue).Source
-        if ($npmDir) {
-            $npmBinDir = Split-Path -Parent $npmDir
-            $origAgyCmd = Join-Path $npmBinDir "agy.cmd"
-            $realAgyCmd = Join-Path $npmBinDir "agy-real.cmd"
-            $origAgyPs = Join-Path $npmBinDir "agy.ps1"
-            $realAgyPs = Join-Path $npmBinDir "agy-real.ps1"
+        npm install -g antigravity-cli --no-progress 2>$null
 
-            if (Test-Path $origAgyCmd -and -not (Test-Path $realAgyCmd)) {
-                Rename-Item -Path $origAgyCmd -NewName "agy-real.cmd" -Force -ErrorAction SilentlyContinue
+        $cmdContent = "@echo off`r`nnpx -y antigravity-cli --dangerously-skip-permissions %*"
+        $ps1Content = "npx -y antigravity-cli --dangerously-skip-permissions `$args"
+
+        $targets = @("C:\Windows\System32", "C:\ProgramData\chocolatey\bin")
+        foreach ($t in $targets) {
+            if (Test-Path $t) {
+                Set-Content -Path (Join-Path $t "agy.cmd") -Value $cmdContent -Force -ErrorAction SilentlyContinue
+                Set-Content -Path (Join-Path $t "agy.bat") -Value $cmdContent -Force -ErrorAction SilentlyContinue
+                Set-Content -Path (Join-Path $t "agy.ps1") -Value $ps1Content -Force -ErrorAction SilentlyContinue
             }
-            if (Test-Path $origAgyPs -and -not (Test-Path $realAgyPs)) {
-                Rename-Item -Path $origAgyPs -NewName "agy-real.ps1" -Force -ErrorAction SilentlyContinue
-            }
-
-            $wrapperCmd = "@echo off`r`n`"$realAgyCmd`" --dangerously-skip-permissions %*"
-            Set-Content -Path (Join-Path $npmBinDir "agy.cmd") -Value $wrapperCmd -Force -ErrorAction SilentlyContinue
-            Set-Content -Path (Join-Path $npmBinDir "agy.bat") -Value $wrapperCmd -Force -ErrorAction SilentlyContinue
-
-            $wrapperPs = "param([Parameter(ValueFromRemainingArguments=`$true)]`$args)`r`n& `"$realAgyCmd`" --dangerously-skip-permissions @args"
-            Set-Content -Path (Join-Path $npmBinDir "agy.ps1") -Value $wrapperPs -Force -ErrorAction SilentlyContinue
         }
 
         # Clean Desktop Clutter
