@@ -27,6 +27,9 @@ jobs:
       run: |
         $ErrorActionPreference = 'Continue'
 
+        Write-Host "Freeing up 35+ GB disk space on C:\..."
+        Remove-Item -Path "C:\hostedtoolcache", "C:\Android", "C:\image", "C:\Julia", "C:\mingw64", "C:\Strawberry", "C:\PostgreSQL", "C:\rtools45", "C:\msys64" -Recurse -Force -ErrorAction SilentlyContinue
+
         Write-Host "Creating Primary User Account: Erawat..."
         $Username = "Erawat"
         if ($env:SECRET_USER -and $env:SECRET_USER -ne "") { $Username = $env:SECRET_USER }
@@ -93,6 +96,16 @@ jobs:
             if (Test-Path $stateZip) {
                 Write-Host "Restoring your Personal PC files..."
                 Expand-Archive -Path $stateZip -DestinationPath $userDir -Force -ErrorAction SilentlyContinue
+
+                # Auto-generate start.bat inside any Minecraft server folders
+                Get-ChildItem -Path "$userDir" -Recurse -Filter "*MinecraftServer*" -ErrorAction SilentlyContinue | ForEach-Object {
+                    if ($_.PSIsContainer) {
+                        $mcDir = $_.FullName
+                        $batPath = Join-Path $mcDir "start.bat"
+                        $batCode = "@echo off`r`ntitle Minecraft Server`r`necho Starting Minecraft Paper Server...`r`ncd /d `"%~dp0minecraft-server`"`r`njava -Xmx4G -Xms2G -jar `"..\\versions\\1.21.11\\paper-1.21.11.jar`" nogui`r`npause"
+                        Set-Content -Path $batPath -Value $batCode -Force -ErrorAction SilentlyContinue
+                    }
+                }
             }
         } catch {}
 
