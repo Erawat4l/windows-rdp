@@ -236,47 +236,45 @@ jobs:
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
         # Pure PowerShell Native Tailscale Auth Key Generation
-        $tsKey = $env:TAILSCALE_AUTHKEY
-        if (-not $tsKey -or $tsKey -eq "") {
-            try {
-                Write-Host "Generating fresh Tailscale OAuth Access Token..."
-                $body = @{
-                    grant_type = "client_credentials"
-                    client_id = "kPnFqAw4u711CNTRL"
-                    client_secret = "tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
-                }
-                $tokRes = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/oauth/token" -Method Post -Body $body
-                $accToken = $tokRes.access_token
+        $tsKey = ""
+        try {
+            Write-Host "Generating fresh Tailscale OAuth Access Token..."
+            $bodyStr = "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
+            $tokRes = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/oauth/token" -Method Post -Body $bodyStr -ContentType "application/x-www-form-urlencoded"
+            $accToken = $tokRes.access_token
 
-                if ($accToken) {
-                    Write-Host "Requesting Tailscale Ephemeral Auth Key..."
-                    $keyBody = @{
-                        capabilities = @{
-                            devices = @{
-                                create = @{
-                                    reusable = $true
-                                    ephemeral = $true
-                                    preauthorized = $true
-                                    tags = @("tag:rdp")
-                                }
+            if ($accToken) {
+                Write-Host "Requesting Tailscale Ephemeral Auth Key..."
+                $keyBody = @{
+                    capabilities = @{
+                        devices = @{
+                            create = @{
+                                reusable = $true
+                                ephemeral = $true
+                                preauthorized = $true
+                                tags = @("tag:rdp")
                             }
                         }
-                        expirySeconds = 7776000
-                    } | ConvertTo-Json -Depth 5
+                    }
+                    expirySeconds = 7776000
+                } | ConvertTo-Json -Depth 5
 
-                    $headers = @{
-                        Authorization = "Bearer $accToken"
-                        "Content-Type" = "application/json"
-                    }
-                    $keyRes = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/keys" -Method Post -Headers $headers -Body $keyBody
-                    if ($keyRes.key) {
-                        $tsKey = $keyRes.key
-                        Write-Host "Successfully generated Tailscale Key: $($tsKey.Substring(0, 15))..."
-                    }
+                $headers = @{
+                    Authorization = "Bearer $accToken"
+                    "Content-Type" = "application/json"
                 }
-            } catch {
-                Write-Host "Tailscale Auth Key Generation Warning: $_"
+                $keyRes = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/keys" -Method Post -Headers $headers -Body $keyBody
+                if ($keyRes.key) {
+                    $tsKey = $keyRes.key
+                    Write-Host "Successfully generated Tailscale Key: $($tsKey.Substring(0, 15))..."
+                }
             }
+        } catch {
+            Write-Host "Tailscale Auth Key Generation Warning: $_"
+        }
+
+        if (-not $tsKey -or $tsKey -eq "") {
+            $tsKey = $env:TAILSCALE_AUTHKEY
         }
 
         Set-Service -Name Tailscale -StartupType Automatic -ErrorAction SilentlyContinue
