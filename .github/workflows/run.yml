@@ -274,6 +274,19 @@ jobs:
         for ($i=1; $i -le 2160; $i++) {
             Start-Sleep -Seconds 10
             try {
+                # Auto-sync any dynamic profile directory (Erawat.* or TEMP) into C:\Users\Erawat
+                Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "Erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
+                    $dynPath = $_.FullName
+                    if (-not (Get-Item $dynPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
+                        Get-ChildItem -Path $dynPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                            $dest = Join-Path "C:\Users\Erawat" $_.Name
+                            if (-not (Test-Path $dest)) {
+                                Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                    }
+                }
+
                 $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
                 if ($itemsToSave) {
                     Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
@@ -291,6 +304,18 @@ jobs:
         Write-Host "Saving final Personal PC storage state before VM shutdown..."
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
         try {
+            Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "Erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
+                $dynPath = $_.FullName
+                if (-not (Get-Item $dynPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
+                    Get-ChildItem -Path $dynPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                        $dest = Join-Path "C:\Users\Erawat" $_.Name
+                        if (-not (Test-Path $dest)) {
+                            Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                }
+            }
+
             $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
             if ($itemsToSave) {
                 Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
