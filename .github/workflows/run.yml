@@ -168,40 +168,28 @@ jobs:
 
         Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
-        # Install Tailscale via Chocolatey (Reliable, synchronous installation)
+        # Install Tailscale via Chocolatey
         Write-Host "Installing Tailscale via Chocolatey..."
         choco install tailscale --no-progress -y
 
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        # Auto-generate fresh Tailscale Auth Key dynamically if needed
+        # Dynamic Tailscale Auth Key Generation via curl.exe
         $tsKey = $env:TAILSCALE_AUTHKEY
-        try {
-            $oauthUrl = "https://api.tailscale.com/api/v2/oauth/token"
-            $body = "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
-            $oauthResp = Invoke-RestMethod -Uri $oauthUrl -Method Post -Body $body -ContentType "application/x-www-form-urlencoded"
-            $accessToken = $oauthResp.access_token
+        if (-not $tsKey -or $tsKey -eq "") {
+            try {
+                $tokRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/oauth/token" -d "grant_type=client_credentials" -d "client_id=kPnFqAw4u711CNTRL" -d "client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
+                $tokObj = $tokRaw | ConvertFrom-Json
+                $accToken = $tokObj.access_token
 
-            if ($accessToken) {
-                $keyUrl = "https://api.tailscale.com/api/v2/tailnet/-/keys"
-                $keyPayload = @{
-                    capabilities = @{
-                        devices = @{
-                            create = @{
-                                reusable = $true
-                                ephemeral = $true
-                                preauthorized = $true
-                                tags = @("tag:rdp")
-                            }
-                        }
-                    }
-                    expirySeconds = 7776000
-                } | ConvertTo-Json -Depth 5
-
-                $keyResp = Invoke-RestMethod -Uri $keyUrl -Method Post -Headers @{ Authorization = "Bearer $accessToken" } -Body $keyPayload -ContentType "application/json"
-                if ($keyResp.key) { $tsKey = $keyResp.key }
-            }
-        } catch {}
+                if ($accToken) {
+                    $kp = '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:rdp"]}}},"expirySeconds":7776000}'
+                    $kRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" -H "Authorization: Bearer $accToken" -H "Content-Type: application/json" -d $kp
+                    $kObj = $kRaw | ConvertFrom-Json
+                    if ($kObj.key) { $tsKey = $kObj.key }
+                }
+            } catch {}
+        }
 
         Set-Service -Name Tailscale -StartupType Automatic -ErrorAction SilentlyContinue
         Start-Service -Name Tailscale -ErrorAction SilentlyContinue
