@@ -168,17 +168,11 @@ jobs:
 
         Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
-        # Install Tailscale via standalone EXE installer (Self-starts service & daemon)
-        Write-Host "Installing Tailscale..."
-        $tsExeInstaller = "$env:TEMP/tailscale-setup.exe"
-        curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o $tsExeInstaller
-        Start-Process $tsExeInstaller -ArgumentList "/silent" -Wait
-        Start-Sleep -Seconds 3
+        # Install Tailscale via Chocolatey (Reliable, synchronous installation)
+        Write-Host "Installing Tailscale via Chocolatey..."
+        choco install tailscale --no-progress -y
 
-        $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
-        if (-not (Test-Path $tailscaleExe)) {
-            $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-        }
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
         # Auto-generate fresh Tailscale Auth Key dynamically if needed
         $tsKey = $env:TAILSCALE_AUTHKEY
@@ -214,10 +208,10 @@ jobs:
         Start-Sleep -Seconds 2
 
         $TsIp = ""
-        for ($i=1; $i -le 15; $i++) {
-            & $tailscaleExe up --authkey="$tsKey" --accept-routes --hostname="erardp" --ssh -ErrorAction SilentlyContinue
+        for ($i=1; $i -le 20; $i++) {
+            & tailscale up --authkey="$tsKey" --accept-routes --hostname="erardp" --ssh 2>&1
             Start-Sleep -Seconds 2
-            $rawIp = (& $tailscaleExe ip -4 2>$null)
+            $rawIp = (& tailscale ip -4 2>$null)
             if ($rawIp) {
                 $TsIp = $rawIp.Trim()
                 if ($TsIp -match '^100\.') { break }
