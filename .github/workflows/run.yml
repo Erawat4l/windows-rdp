@@ -230,7 +230,7 @@ jobs:
         $TsIp = ""
         for ($i=1; $i -le 20; $i++) {
             Write-Host "Connecting Tailscale (Attempt $i/20)..."
-            $upOut = & "$tsBinary" up --authkey="$tsKey" --accept-routes --hostname="erardp" --ssh 2>&1 | Out-String
+            $upOut = & "$tsBinary" up --authkey="$tsKey" --accept-routes --hostname="erardp" 2>&1 | Out-String
             Write-Host "Tailscale Log: $upOut"
             Start-Sleep -Seconds 2
             $rawIp = (& "$tsBinary" ip -4 2>$null)
