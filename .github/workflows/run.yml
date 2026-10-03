@@ -81,8 +81,8 @@ jobs:
             }
         }
 
-        # Convert any erawat.* dynamic profile directories into Junction Links pointing to C:\Users\Erawat
-        Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" } | ForEach-Object {
+        # Convert any erawat.* / TEMP dynamic profile directories into Junction Links pointing to C:\Users\Erawat
+        Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
             $pPath = $_.FullName
             try {
                 if (-not (Get-Item $pPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
@@ -164,10 +164,11 @@ jobs:
         Set-ItemProperty -Path $sysProfile -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $sysProfile -Name "SystemResponsiveness" -Value 0 -Type DWord -ErrorAction SilentlyContinue
 
-        # Custom PowerShell Prompt
+        # Custom PowerShell Prompt - Always redirect startup location to C:\Users\Erawat
         $promptLines = @(
             '$erawatMain = "C:\Users\Erawat"',
-            'if ((Get-Location).Path -like "*erawat.*") { Set-Location $erawatMain -ErrorAction SilentlyContinue }',
+            '$currP = (Get-Location).Path',
+            'if ($currP -ne $erawatMain -and ($currP -like "*Users\TEMP*" -or $currP -like "*erawat.*" -or $currP -eq "C:\Users\runneradmin")) { Set-Location $erawatMain -ErrorAction SilentlyContinue }',
             'function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }'
         )
         $promptCode = $promptLines -join "`r`n"
@@ -323,11 +324,11 @@ jobs:
       run: |
         Write-Host "Personal Windows PC Active (6 Hour Max Duration). Periodically backing up your Personal PC files..."
         $stateZip = "$env:TEMP/erawat_pc_state.zip"
-        for ($i=1; $i -le 720; $i++) {
-            Start-Sleep -Seconds 30
+        for ($i=1; $i -le 2160; $i++) {
+            Start-Sleep -Seconds 10
             try {
-                # Auto-convert any newly created erawat.* folders to Junctions pointing to C:\Users\Erawat
-                Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" } | ForEach-Object {
+                # Auto-convert any newly created erawat.* or TEMP folders to Junctions pointing to C:\Users\Erawat
+                Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
                     $pPath = $_.FullName
                     if (-not (Get-Item $pPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
                         Get-ChildItem -Path $pPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
