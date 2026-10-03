@@ -103,7 +103,7 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
 
-        # Enable RDP, Remove Desktop Watermark & Configure Firewall
+        # Enable RDP & Remove Desktop Watermark
         Write-Host "Enabling Remote Desktop..."
         bcdedit /set testsigning off -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows' -Name 'DisplayNotSupported' -Value 0 -ErrorAction SilentlyContinue
@@ -111,8 +111,6 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
-        Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
 
         # Fast Network Latency Tweaks
         $sysProfile = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
@@ -135,7 +133,6 @@ jobs:
 
         # Fast OpenSSH Configuration (No DISM download needed)
         Write-Host "Configuring OpenSSH Server..."
-        Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
         Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
         Start-Service sshd -ErrorAction SilentlyContinue
         Get-Process -Name sshd -ErrorAction SilentlyContinue | ForEach-Object { $_.PriorityClass = 'High' }
@@ -242,6 +239,14 @@ jobs:
                 }
             }
         }
+
+        # Disable Windows Firewall AFTER Tailscale Adapter is active to allow Port 22 and Port 3389
+        Write-Host "Disabling Windows Firewall & Opening Ports 22 & 3389 on Tailscale..."
+        Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction SilentlyContinue
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+        Enable-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName "OpenSSH-22-Allow" -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName "RDP-3389-Allow" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow -ErrorAction SilentlyContinue
 
         # Background Cloudflare Tunnel start
         Start-Job -ScriptBlock {
