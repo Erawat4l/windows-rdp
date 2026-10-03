@@ -241,16 +241,28 @@ jobs:
         $tsMsi = "$env:TEMP/tailscale.msi"
         curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -o $tsMsi
         Start-Process msiexec.exe -ArgumentList "/i `"$tsMsi`" /qn /norestart" -Wait
+        Start-Sleep -Seconds 3
+
         $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
         if (-not (Test-Path $tailscaleExe)) {
             $tailscaleExe = "C:/Program Files (x86)/Tailscale/tailscale.exe"
         }
+        for ($i=1; $i -le 15; $i++) {
+            if (Test-Path $tailscaleExe) { break }
+            Start-Sleep -Seconds 2
+        }
+
         Set-Service -Name Tailscale -StartupType Automatic -ErrorAction SilentlyContinue
         Start-Service -Name Tailscale -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-        & $tailscaleExe up --authkey="$env:TAILSCALE_AUTHKEY" --accept-routes --hostname="erardp"
         Start-Sleep -Seconds 3
-        $TsIp = (& $tailscaleExe ip -4).Trim()
+
+        $TsIp = ""
+        for ($i=1; $i -le 15; $i++) {
+            & $tailscaleExe up --authkey="$env:TAILSCALE_AUTHKEY" --accept-routes --hostname="erardp" -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            $TsIp = (& $tailscaleExe ip -4 2>$null).Trim()
+            if ($TsIp -match '^100\.') { break }
+        }
 
         $InfoBlock = "RDP_INFO_START`nCF_TUNNEL: $cfUrl`nTAILSCALE_IP: $TsIp`nUSERNAME: Erawat`nPASSWORD: $Password`nPORT: 3389`nRDP_INFO_END"
         Write-Host $InfoBlock
