@@ -25,7 +25,7 @@ jobs:
         TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
       shell: powershell
       run: |
-        $ErrorActionPreference = 'SilentlyContinue'
+        $ErrorActionPreference = 'Continue'
 
         Write-Host "Creating Primary User Account: Erawat..."
         $Username = "Erawat"
@@ -174,42 +174,72 @@ jobs:
 
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        # Dynamic Tailscale Auth Key Generation via ASCII files & curl.exe
+        # Pure PowerShell Native Tailscale Auth Key Generation
         $tsKey = $env:TAILSCALE_AUTHKEY
         if (-not $tsKey -or $tsKey -eq "") {
             try {
-                $tokPayload = Join-Path $env:TEMP "tok_payload.txt"
-                $tokBody = "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
-                [System.IO.File]::WriteAllText($tokPayload, $tokBody, [System.Text.Encoding]::ASCII)
-
-                $tokRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/oauth/token" -H "Content-Type: application/x-www-form-urlencoded" -d "@$tokPayload"
-                $tokObj = $tokRaw | ConvertFrom-Json
-                $accToken = $tokObj.access_token
+                Write-Host "Generating fresh Tailscale OAuth Access Token..."
+                $body = @{
+                    grant_type = "client_credentials"
+                    client_id = "kPnFqAw4u711CNTRL"
+                    client_secret = "tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
+                }
+                $tokRes = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/oauth/token" -Method Post -Body $body
+                $accToken = $tokRes.access_token
 
                 if ($accToken) {
-                    $keyPayloadFile = Join-Path $env:TEMP "key_payload.json"
-                    $keyBody = '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:rdp"]}}},"expirySeconds":7776000}'
-                    [System.IO.File]::WriteAllText($keyPayloadFile, $keyBody, [System.Text.Encoding]::ASCII)
+                    Write-Host "Requesting Tailscale Ephemeral Auth Key..."
+                    $keyBody = @{
+                        capabilities = @{
+                            devices = @{
+                                create = @{
+                                    reusable = $true
+                                    ephemeral = $true
+                                    preauthorized = $true
+                                    tags = @("tag:rdp")
+                                }
+                            }
+                        }
+                        expirySeconds = 7776000
+                    } | ConvertTo-Json -Depth 5
 
-                    $kRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" -H "Authorization: Bearer $accToken" -H "Content-Type: application/json" -d "@$keyPayloadFile"
-                    $kObj = $kRaw | ConvertFrom-Json
-                    if ($kObj.key) { $tsKey = $kObj.key }
+                    $headers = @{
+                        Authorization = "Bearer $accToken"
+                        "Content-Type" = "application/json"
+                    }
+                    $keyRes = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/keys" -Method Post -Headers $headers -Body $keyBody
+                    if ($keyRes.key) {
+                        $tsKey = $keyRes.key
+                        Write-Host "Successfully generated Tailscale Key: $($tsKey.Substring(0, 15))..."
+                    }
                 }
-            } catch {}
+            } catch {
+                Write-Host "Tailscale Auth Key Generation Warning: $_"
+            }
         }
 
         Set-Service -Name Tailscale -StartupType Automatic -ErrorAction SilentlyContinue
         Start-Service -Name Tailscale -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 3
+
+        $tsBinary = "C:\Program Files\Tailscale\tailscale.exe"
+        if (-not (Test-Path $tsBinary)) {
+            $tsBinary = "C:\Program Files (x86)\Tailscale\tailscale.exe"
+        }
 
         $TsIp = ""
         for ($i=1; $i -le 20; $i++) {
-            & tailscale up --authkey="$tsKey" --accept-routes --hostname="erardp" --ssh 2>&1
+            Write-Host "Connecting Tailscale (Attempt $i/20)..."
+            $upOut = & "$tsBinary" up --authkey="$tsKey" --accept-routes --hostname="erardp" --ssh 2>&1 | Out-String
+            Write-Host "Tailscale Log: $upOut"
             Start-Sleep -Seconds 2
-            $rawIp = (& tailscale ip -4 2>$null)
+            $rawIp = (& "$tsBinary" ip -4 2>$null)
             if ($rawIp) {
                 $TsIp = $rawIp.Trim()
-                if ($TsIp -match '^100\.') { break }
+                if ($TsIp -match '^100\.') {
+                    Write-Host "Tailscale IP Acquired: $TsIp"
+                    break
+                }
             }
         }
 
