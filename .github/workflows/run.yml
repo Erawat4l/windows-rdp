@@ -121,12 +121,11 @@ jobs:
         Set-ItemProperty -Path $userListPath -Name "Guest" -Value 0 -Type DWord -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $userListPath -Name "DefaultAccount" -Value 0 -Type DWord -ErrorAction SilentlyContinue
 
-        # Configure AutoLogon directly into Erawat
+        # Configure Winlogon settings
         $winlogonPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-        Set-ItemProperty -Path $winlogonPath -Name "AutoAdminLogon" -Value "1" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $winlogonPath -Name "AutoAdminLogon" -Value "0" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $winlogonPath -Name "DefaultUserName" -Value "Erawat" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $winlogonPath -Name "DefaultPassword" -Value "$Password" -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $winlogonPath -Name "DefaultDomainName" -Value "EraRDP" -ErrorAction SilentlyContinue
 
         # Hide Preinstalled Runner Clutter from C:\ drive
         $clutter = @(
@@ -164,7 +163,7 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
 
-        # Enable RDP & Fix Black Screen on Headless Cloud VMs
+        # Enable RDP & Fix Display Rendering
         Write-Host "Enabling Remote Desktop and Display Rendering..."
         bcdedit /set testsigning off -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows' -Name 'DisplayNotSupported' -Value 0 -ErrorAction SilentlyContinue
@@ -173,15 +172,13 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
 
-        # FIX RDP BLACK SCREEN: Disable WDDM graphics driver on headless VM to force software display rendering
+        # Enable default WDDM driver rendering for Windows Server 2022 / Windows 11
         $tsPolicyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
         if (-not (Test-Path $tsPolicyKey)) { New-Item -Path $tsPolicyKey -Force -ErrorAction SilentlyContinue }
-        Set-ItemProperty -Path $tsPolicyKey -Name "fEnableWddmDriver" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $tsPolicyKey -Name "fEnableWddmDriver" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
 
         $rdpTcpKey = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-        Set-ItemProperty -Path $rdpTcpKey -Name "fEnableWddmDriver" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $rdpTcpKey -Name "fInheritColorDepth" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $rdpTcpKey -Name "ColorDepth" -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $rdpTcpKey -Name "fEnableWddmDriver" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
 
         # Fast Network Latency Tweaks
         $sysProfile = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
