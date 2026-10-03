@@ -168,21 +168,46 @@ jobs:
 
         Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
-        # Install & Join Tailscale FIRST
+        # Install Tailscale via standalone EXE installer (Self-starts service & daemon)
         Write-Host "Installing Tailscale..."
-        $tsMsi = "$env:TEMP/tailscale.msi"
-        curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -o $tsMsi
-        Start-Process msiexec.exe -ArgumentList "/i `"$tsMsi`" /qn /norestart" -Wait
-        Start-Sleep -Seconds 2
+        $tsExeInstaller = "$env:TEMP/tailscale-setup.exe"
+        curl.exe -sL "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -o $tsExeInstaller
+        Start-Process $tsExeInstaller -ArgumentList "/silent" -Wait
+        Start-Sleep -Seconds 3
 
-        $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
+        $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
         if (-not (Test-Path $tailscaleExe)) {
-            $tailscaleExe = "C:/Program Files (x86)/Tailscale/tailscale.exe"
+            $tailscaleExe = "C:\Program Files (x86)\Tailscale\tailscale.exe"
         }
-        for ($i=1; $i -le 10; $i++) {
-            if (Test-Path $tailscaleExe) { break }
-            Start-Sleep -Seconds 1
-        }
+
+        # Auto-generate fresh Tailscale Auth Key dynamically if needed
+        $tsKey = $env:TAILSCALE_AUTHKEY
+        try {
+            $oauthUrl = "https://api.tailscale.com/api/v2/oauth/token"
+            $body = "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
+            $oauthResp = Invoke-RestMethod -Uri $oauthUrl -Method Post -Body $body -ContentType "application/x-www-form-urlencoded"
+            $accessToken = $oauthResp.access_token
+
+            if ($accessToken) {
+                $keyUrl = "https://api.tailscale.com/api/v2/tailnet/-/keys"
+                $keyPayload = @{
+                    capabilities = @{
+                        devices = @{
+                            create = @{
+                                reusable = $true
+                                ephemeral = $true
+                                preauthorized = $true
+                                tags = @("tag:rdp")
+                            }
+                        }
+                    }
+                    expirySeconds = 7776000
+                } | ConvertTo-Json -Depth 5
+
+                $keyResp = Invoke-RestMethod -Uri $keyUrl -Method Post -Headers @{ Authorization = "Bearer $accessToken" } -Body $keyPayload -ContentType "application/json"
+                if ($keyResp.key) { $tsKey = $keyResp.key }
+            }
+        } catch {}
 
         Set-Service -Name Tailscale -StartupType Automatic -ErrorAction SilentlyContinue
         Start-Service -Name Tailscale -ErrorAction SilentlyContinue
@@ -190,10 +215,13 @@ jobs:
 
         $TsIp = ""
         for ($i=1; $i -le 15; $i++) {
-            & $tailscaleExe up --authkey="$env:TAILSCALE_AUTHKEY" --accept-routes --hostname="erardp" --ssh -ErrorAction SilentlyContinue
+            & $tailscaleExe up --authkey="$tsKey" --accept-routes --hostname="erardp" --ssh -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 2
-            $TsIp = (& $tailscaleExe ip -4 2>$null).Trim()
-            if ($TsIp -match '^100\.') { break }
+            $rawIp = (& $tailscaleExe ip -4 2>$null)
+            if ($rawIp) {
+                $TsIp = $rawIp.Trim()
+                if ($TsIp -match '^100\.') { break }
+            }
         }
 
         # Background Cloudflare Tunnel start
