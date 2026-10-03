@@ -174,20 +174,22 @@ jobs:
 
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        # Dynamic Tailscale Auth Key Generation via curl.exe and payload files
+        # Dynamic Tailscale Auth Key Generation via ASCII files & curl.exe
         $tsKey = $env:TAILSCALE_AUTHKEY
         if (-not $tsKey -or $tsKey -eq "") {
             try {
-                $tokPayload = "$env:TEMP/tok_payload.txt"
-                "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad" | Set-Content $tokPayload
+                $tokPayload = Join-Path $env:TEMP "tok_payload.txt"
+                $tokBody = "grant_type=client_credentials&client_id=kPnFqAw4u711CNTRL&client_secret=tskey-client-kPnFqAw4u711CNTRL-Nch1U6AHqRfY94cPB34oQfWyDwRGwhzad"
+                [System.IO.File]::WriteAllText($tokPayload, $tokBody, [System.Text.Encoding]::ASCII)
 
                 $tokRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/oauth/token" -H "Content-Type: application/x-www-form-urlencoded" -d "@$tokPayload"
                 $tokObj = $tokRaw | ConvertFrom-Json
                 $accToken = $tokObj.access_token
 
                 if ($accToken) {
-                    $keyPayloadFile = "$env:TEMP/key_payload.json"
-                    '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:rdp"]}}},"expirySeconds":7776000}' | Set-Content $keyPayloadFile
+                    $keyPayloadFile = Join-Path $env:TEMP "key_payload.json"
+                    $keyBody = '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:rdp"]}}},"expirySeconds":7776000}'
+                    [System.IO.File]::WriteAllText($keyPayloadFile, $keyBody, [System.Text.Encoding]::ASCII)
 
                     $kRaw = curl.exe -s -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" -H "Authorization: Bearer $accToken" -H "Content-Type: application/json" -d "@$keyPayloadFile"
                     $kObj = $kRaw | ConvertFrom-Json
