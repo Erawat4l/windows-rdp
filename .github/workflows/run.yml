@@ -43,15 +43,30 @@ jobs:
         Add-LocalGroupMember -Group "Administrators" -Member "Erawat" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Erawat" -ErrorAction SilentlyContinue
 
-        # Initialize User Directory Structure
+        # Initialize User Directory Structure & Populate NTUSER.DAT profile template
         $userDir = "C:\Users\Erawat"
         if (-not (Test-Path $userDir)) { New-Item -ItemType Directory -Force -Path $userDir -ErrorAction SilentlyContinue }
+        if (-not (Test-Path "$userDir\NTUSER.DAT")) {
+            Get-ChildItem -Path "C:\Users\Default" -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                $dest = Join-Path $userDir $_.Name
+                if (-not (Test-Path $dest)) {
+                    Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
         icacls.exe "$userDir" /grant "Erawat:(OI)(CI)F" /grant "*S-1-5-32-544:(OI)(CI)F" /grant "*S-1-5-18:(OI)(CI)F" /T 2>$null
 
         $subDirs = @("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")
         foreach ($sub in $subDirs) {
             $p = Join-Path $userDir $sub
             if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p -ErrorAction SilentlyContinue }
+        }
+
+        # Purge any stale .bak profile entries in Registry
+        Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.PSChildName -like '*.bak') {
+                Remove-Item $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
         }
 
         # Force ProfileImagePath for Erawat SID in Registry
