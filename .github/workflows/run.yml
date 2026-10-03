@@ -151,7 +151,6 @@ jobs:
 
         # Custom PowerShell Prompt & Auto-Formatting LS Table
         $promptLines = @(
-            'try { [Console]::Clear() } catch {}',
             '$erawatMain = "C:\Users\Erawat"',
             'if ((Get-Location).Path -like "*erawat.*" -or (Get-Location).Path -eq "C:\Users\runneradmin") { Set-Location $erawatMain -ErrorAction SilentlyContinue }',
             'function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }',
@@ -202,7 +201,7 @@ jobs:
 
         if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force -ErrorAction SilentlyContinue }
         New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShellCommandOption" -Value "-NoLogo" -PropertyType String -Force -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShellCommandOption" -Value "-Command" -PropertyType String -Force -ErrorAction SilentlyContinue
 
         Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
