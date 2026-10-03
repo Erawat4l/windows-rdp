@@ -1,6 +1,4 @@
-import sys
-
-yaml_content = '''name: Personal Windows PC RDP & Terminal
+name: Personal Windows PC RDP & Terminal
 
 on:
   workflow_dispatch:
@@ -357,9 +355,3 @@ jobs:
         if (Test-Path $tailscaleExe) {
             & $tailscaleExe logout
         }
-'''
-
-with open('/data/data/com.termux/files/home/Projects/windows-rdp/.github/workflows/run.yml', 'w') as f:
-    f.write(yaml_content)
-
-print("Updated run.yml successfully")
