@@ -43,74 +43,15 @@ jobs:
         Add-LocalGroupMember -Group "Administrators" -Member "Erawat" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Erawat" -ErrorAction SilentlyContinue
 
-        # Initialize User Directory Structure & Populate NTUSER.DAT profile template
+        # Initialize User Directory Structure
         $userDir = "C:\Users\Erawat"
         if (-not (Test-Path $userDir)) { New-Item -ItemType Directory -Force -Path $userDir -ErrorAction SilentlyContinue }
-        if (-not (Test-Path "$userDir\NTUSER.DAT")) {
-            Get-ChildItem -Path "C:\Users\Default" -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                $dest = Join-Path $userDir $_.Name
-                if (-not (Test-Path $dest)) {
-                    Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
-                }
-            }
-        }
         icacls.exe "$userDir" /grant "Erawat:(OI)(CI)F" /grant "*S-1-5-32-544:(OI)(CI)F" /grant "*S-1-5-18:(OI)(CI)F" /T 2>$null
 
         $subDirs = @("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")
         foreach ($sub in $subDirs) {
             $p = Join-Path $userDir $sub
             if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p -ErrorAction SilentlyContinue }
-        }
-
-        # Purge any stale .bak profile entries in Registry
-        Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -ErrorAction SilentlyContinue | ForEach-Object {
-            if ($_.PSChildName -like '*.bak') {
-                Remove-Item $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
-
-        # Force ProfileImagePath for Erawat SID in Registry
-        try {
-            $userSid = (Get-LocalUser -Name "Erawat").SID.Value
-            if ($userSid) {
-                $pKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$userSid"
-                if (-not (Test-Path $pKey)) { New-Item -Path $pKey -Force -ErrorAction SilentlyContinue }
-                Set-ItemProperty -Path $pKey -Name "ProfileImagePath" -Value "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue
-                Set-ItemProperty -Path $pKey -Name "Flags" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-                Set-ItemProperty -Path $pKey -Name "State" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-            }
-        } catch {}
-
-        # Copy development tool caches (.cargo, .dotnet, .rustup) to C:\Users\Erawat
-        $toolDirs = @(".cargo", ".dotnet", ".rustup")
-        Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | ForEach-Object {
-            $uDir = $_.FullName
-            if ($uDir -ne "C:\Users\Erawat") {
-                foreach ($td in $toolDirs) {
-                    $src = Join-Path $uDir $td
-                    $dst = Join-Path "C:\Users\Erawat" $td
-                    if ((Test-Path $src) -and -not (Test-Path $dst)) {
-                        Copy-Item -Path $src -Destination $dst -Recurse -Force -ErrorAction SilentlyContinue
-                    }
-                }
-            }
-        }
-
-        # Convert any erawat.* / TEMP dynamic profile directories into Junction Links pointing to C:\Users\Erawat
-        Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
-            $pPath = $_.FullName
-            try {
-                if (-not (Get-Item $pPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
-                    Get-ChildItem -Path $pPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                        $dest = Join-Path "C:\Users\Erawat" $_.Name
-                        if (-not (Test-Path $dest)) {
-                            Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
-                        }
-                    }
-                    Remove-Item -Path $pPath -Recurse -Force -ErrorAction SilentlyContinue
-                    New-Item -ItemType Junction -Path $pPath -Value "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue
-                }
-            } catch {}
         }
 
         # Hide extra runner accounts from Windows Login screen
@@ -121,9 +62,9 @@ jobs:
         Set-ItemProperty -Path $userListPath -Name "Guest" -Value 0 -Type DWord -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $userListPath -Name "DefaultAccount" -Value 0 -Type DWord -ErrorAction SilentlyContinue
 
-        # Configure Winlogon settings
+        # Configure AutoLogon directly into Erawat
         $winlogonPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-        Set-ItemProperty -Path $winlogonPath -Name "AutoAdminLogon" -Value "0" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $winlogonPath -Name "AutoAdminLogon" -Value "1" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $winlogonPath -Name "DefaultUserName" -Value "Erawat" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $winlogonPath -Name "DefaultPassword" -Value "$Password" -ErrorAction SilentlyContinue
 
@@ -163,8 +104,8 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name "ComputerName" -Value "EraRDP" -ErrorAction SilentlyContinue
 
-        # Enable RDP & Fix Display Rendering
-        Write-Host "Enabling Remote Desktop and Display Rendering..."
+        # Enable RDP
+        Write-Host "Enabling Remote Desktop..."
         bcdedit /set testsigning off -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows' -Name 'DisplayNotSupported' -Value 0 -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name 'PaintDesktopVersion' -Value 0 -ErrorAction SilentlyContinue
@@ -172,21 +113,7 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force -ErrorAction SilentlyContinue
 
-        # Enable default WDDM driver rendering for Windows Server 2022 / Windows 11
-        $tsPolicyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
-        if (-not (Test-Path $tsPolicyKey)) { New-Item -Path $tsPolicyKey -Force -ErrorAction SilentlyContinue }
-        Set-ItemProperty -Path $tsPolicyKey -Name "fEnableWddmDriver" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-
-        $rdpTcpKey = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
-        Set-ItemProperty -Path $rdpTcpKey -Name "fEnableWddmDriver" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-
-        # Fast Network Latency Tweaks
-        $sysProfile = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
-        if (-not (Test-Path $sysProfile)) { New-Item -Path $sysProfile -Force -ErrorAction SilentlyContinue }
-        Set-ItemProperty -Path $sysProfile -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $sysProfile -Name "SystemResponsiveness" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-
-        # Custom PowerShell Prompt - Always redirect startup location to C:\Users\Erawat
+        # Custom PowerShell Prompt
         $promptLines = @(
             '$erawatMain = "C:\Users\Erawat"',
             '$currP = (Get-Location).Path',
@@ -347,21 +274,6 @@ jobs:
         for ($i=1; $i -le 2160; $i++) {
             Start-Sleep -Seconds 10
             try {
-                # Auto-convert any newly created erawat.* or TEMP folders to Junctions pointing to C:\Users\Erawat
-                Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "erawat.*" -or $_.Name -eq "TEMP" } | ForEach-Object {
-                    $pPath = $_.FullName
-                    if (-not (Get-Item $pPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
-                        Get-ChildItem -Path $pPath -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                            $dest = Join-Path "C:\Users\Erawat" $_.Name
-                            if (-not (Test-Path $dest)) {
-                                Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force -ErrorAction SilentlyContinue
-                            }
-                        }
-                        Remove-Item -Path $pPath -Recurse -Force -ErrorAction SilentlyContinue
-                        New-Item -ItemType Junction -Path $pPath -Value "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue
-                    }
-                }
-
                 $itemsToSave = Get-ChildItem -Path "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^\.(cargo|rustup|dotnet)' -and $_.Name -ne 'AppData' }
                 if ($itemsToSave) {
                     Compress-Archive -Path $itemsToSave.FullName -DestinationPath $stateZip -Force -ErrorAction SilentlyContinue
