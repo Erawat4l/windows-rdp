@@ -36,25 +36,13 @@ jobs:
 
         $SecPassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
-        # 1. Create Primary User: Erawat
+        # 1. Create Primary User: Erawat & Force ProfileImagePath to C:\Users\Erawat
         New-LocalUser -Name "Erawat" -Password $SecPassword -FullName "Erawat" -Description "Personal PC Owner" -ErrorAction SilentlyContinue
         Set-LocalUser -Name "Erawat" -Password $SecPassword -ErrorAction SilentlyContinue
         Enable-LocalUser -Name "Erawat" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "Erawat" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Erawat" -ErrorAction SilentlyContinue
 
-        # Initialize User Directory Structure
-        $userDir = "C:\Users\Erawat"
-        if (-not (Test-Path $userDir)) { New-Item -ItemType Directory -Force -Path $userDir -ErrorAction SilentlyContinue }
-        icacls.exe "$userDir" /grant "Erawat:(OI)(CI)F" /grant "*S-1-5-32-544:(OI)(CI)F" /grant "*S-1-5-18:(OI)(CI)F" /T 2>$null
-
-        $subDirs = @("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")
-        foreach ($sub in $subDirs) {
-            $p = Join-Path $userDir $sub
-            if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p -ErrorAction SilentlyContinue }
-        }
-
-        # Force ProfileImagePath for Erawat SID in Registry
         try {
             $userSid = (Get-LocalUser -Name "Erawat").SID.Value
             if ($userSid) {
@@ -79,32 +67,13 @@ jobs:
         Set-ItemProperty -Path $winlogonPath -Name "DefaultPassword" -Value "$Password" -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $winlogonPath -Name "DefaultDomainName" -Value "EraRDP" -ErrorAction SilentlyContinue
 
-        # Fast Purge Preinstalled Runner Tool Clutter from C:\
-        $cleanItems = @(
-            'C:\actionarchivecache', 'C:\Android', 'C:\azureCli', 'C:\azureDevOpsCli', 'C:\cobertura-2.1.1',
-            'C:\ghcup', 'C:\hostedtoolcache', 'C:\image', 'C:\Julia', 'C:\mingw32', 'C:\mingw64',
-            'C:\Miniconda', 'C:\Modules', 'C:\msys64', 'C:\npm', 'C:\Packages', 'C:\post-generation',
-            'C:\PostgreSQL', 'C:\PSModuleAnalysisCachePath', 'C:\rtools45', 'C:\selenium', 'C:\SeleniumWebDrivers',
-            'C:\shells', 'C:\Strawberry', 'C:\tools', 'C:\vcpkg', 'C:\appverifUI.dll', 'C:\imagedata.json',
-            'C:\software-report.json', 'C:\software-report.md', 'C:\vfcompat.dll'
-        )
-        foreach ($ci in $cleanItems) {
-            if (Test-Path $ci) {
-                cmd.exe /c "rmdir /s /q `"$ci`"" 2>$null
-                Remove-Item -Path $ci -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
-
-        # Unify and Junction-Link any dynamic user profile folders directly into C:\Users\Erawat
-        Get-ChildItem -Path "C:\Users" -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "Erawat" -and $_.Name -ne "Public" -and $_.Name -ne "Default" } | ForEach-Object {
-            $pPath = $_.FullName
-            try {
-                if (-not (Get-Item $pPath).Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
-                    Copy-Item -Path "$pPath\*" -Destination "C:\Users\Erawat" -Recurse -Force -ErrorAction SilentlyContinue
-                    Remove-Item -Path $pPath -Recurse -Force -ErrorAction SilentlyContinue
-                    New-Item -ItemType Junction -Path $pPath -Value "C:\Users\Erawat" -Force -ErrorAction SilentlyContinue
-                }
-            } catch {}
+        # Initialize User Directory Structure
+        $userDir = "C:/Users/Erawat"
+        if (-not (Test-Path $userDir)) { New-Item -ItemType Directory -Force -Path $userDir -ErrorAction SilentlyContinue }
+        $subDirs = @("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")
+        foreach ($sub in $subDirs) {
+            $p = Join-Path $userDir $sub
+            if (-not (Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p -ErrorAction SilentlyContinue }
         }
 
         # Restore Saved Personal PC Storage State asynchronously/fast if available
@@ -126,8 +95,8 @@ jobs:
         cmd.exe /c "attrib +h +s C:\Users\runneradmin" 2>$null
         cmd.exe /c "attrib +h +s C:\Users\Public" 2>$null
 
-        # Clean Desktop Clutter
-        Remove-Item -Path "C:\Users\Public\Desktop\*" -Recurse -Force -ErrorAction SilentlyContinue
+        # Clean Desktop Clutter & Preinstalled Tools
+        Remove-Item -Path "C:/Users/Public/Desktop/*" -Recurse -Force -ErrorAction SilentlyContinue
 
         # Rename Computer Hostname to EraRDP
         Rename-Computer -NewName "EraRDP" -Force -ErrorAction SilentlyContinue
@@ -150,58 +119,49 @@ jobs:
         Set-ItemProperty -Path $sysProfile -Name "SystemResponsiveness" -Value 0 -Type DWord -ErrorAction SilentlyContinue
 
         # Custom PowerShell Prompt & Auto-Formatting LS Table
-        $promptLines = @(
-            '$erawatMain = "C:\Users\Erawat"',
-            'if ((Get-Location).Path -like "*erawat.*" -or (Get-Location).Path -eq "C:\Users\runneradmin") { Set-Location $erawatMain -ErrorAction SilentlyContinue }',
-            'function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }',
-            'function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l, [switch]$Force); $items = Get-ChildItem -Path $Path -ErrorAction SilentlyContinue; if (-not $Force -and -not $a -and -not $la) { $exclude = @("actions-runner", "WindowsAzure", "inetpub", "PSModuleAnalysisCachePath", "runneradmin", "Public", "Temp", "actionarchivecache", "Android", "azureCli", "azureDevOpsCli", "cobertura-2.1.1", "ghcup", "hostedtoolcache", "image", "Julia", "mingw32", "mingw64", "Miniconda", "Modules", "msys64", "npm", "Packages", "post-generation", "PostgreSQL", "rtools45", "selenium", "SeleniumWebDrivers", "shells", "Strawberry", "tools", "vcpkg", "appverifUI.dll", "imagedata.json", "software-report.json", "software-report.md", "vfcompat.dll"); $items = $items | Where-Object { $n = $_.Name; if ($exclude -contains $n -or $n -like "erawat.*") { return $false }; return $true } }; if ($items) { $items | Select-Object Mode, @{N="LastWriteTime";E={$_.LastWriteTime.ToString("M/d/yyyy  h:mm tt")}}, @{N="Length";E={if($_.Length){$_.Length}else{""}}}, Name | Format-Table -AutoSize } }',
-            'function ll { ls -a }'
-        )
-        $promptCode = $promptLines -join "`r`n"
+        $promptCode = '$esc = [char]27; try { [Console]::Clear() } catch {}; $erawatMain = "C:\Users\Erawat"; $curr = (Get-Location).Path; if ($curr -like "*erawat.*" -or $curr -eq "C:\Users\runneradmin") { Set-Location $erawatMain -ErrorAction SilentlyContinue }; function prompt { $p = (Get-Location).Path -replace "(?i)erawat\.[a-z0-9_-]+","Erawat" -replace "(?i)runneradmin","Erawat" -replace "(?i)Administrator","Erawat"; return "Erawat@RDP $p> " }; function ls { param([string]$Path = ".", [switch]$a, [switch]$la, [switch]$l, [switch]$Force); $items = Get-ChildItem -Path $Path -ErrorAction SilentlyContinue; if (-not $Force -and -not $a -and -not $la) { $exclude = @("actions-runner", "WindowsAzure", "inetpub", "PSModuleAnalysisCachePath", "runneradmin", "Public", "Temp"); $items = $items | Where-Object { $n = $_.Name; if ($exclude -contains $n -or $n -like "erawat.*") { return $false }; return $true } }; if ($items) { $items | Select-Object Mode, @{N="LastWriteTime";E={$_.LastWriteTime.ToString("M/d/yyyy  h:mm tt")}}, @{N="Length";E={if($_.Length){$_.Length}else{""}}}, Name | Format-Table -AutoSize } }; function ll { ls -a }'
 
-        $profilePaths = @(
-            "C:\Windows\System32\WindowsPowerShell\v1.0\profile.ps1",
-            "C:\Windows\System32\WindowsPowerShell\v1.0\Microsoft.PowerShell_profile.ps1",
-            "C:\Users\Erawat\Documents\WindowsPowerShell\profile.ps1",
-            "C:\Users\Erawat\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
-        )
-        foreach ($pp in $profilePaths) {
-            $parent = Split-Path -Parent $pp
-            if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent -ErrorAction SilentlyContinue }
-            Set-Content -Path $pp -Value $promptCode -ErrorAction SilentlyContinue
-        }
+        $profileDir = "C:/Windows/System32/WindowsPowerShell/v1.0"
+        if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir -ErrorAction SilentlyContinue }
+        Set-Content -Path "$profileDir/profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+        Set-Content -Path "$profileDir/Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
 
-        # Fast OpenSSH Configuration
+        $userProfileDir = "C:/Users/Erawat/Documents/WindowsPowerShell"
+        if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Force -Path $userProfileDir -ErrorAction SilentlyContinue }
+        Set-Content -Path "$userProfileDir/profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+        Set-Content -Path "$userProfileDir/Microsoft.PowerShell_profile.ps1" -Value $promptCode -ErrorAction SilentlyContinue
+
+        # Fast OpenSSH Configuration (No DISM download needed)
         Write-Host "Configuring OpenSSH Server..."
         Set-Service -Name sshd -StartupType Automatic -ErrorAction SilentlyContinue
         Start-Service sshd -ErrorAction SilentlyContinue
         Get-Process -Name sshd -ErrorAction SilentlyContinue | ForEach-Object { $_.PriorityClass = 'High' }
         
-        $sshdDir = "C:\ProgramData\ssh"
+        $sshdDir = "C:/ProgramData/ssh"
         if (-not (Test-Path $sshdDir)) { New-Item -ItemType Directory -Force -Path $sshdDir -ErrorAction SilentlyContinue }
-        & "C:\Windows\System32\OpenSSH\ssh-keygen.exe" -A 2>$null
+        & "C:/Windows/System32/OpenSSH/ssh-keygen.exe" -A 2>$null
 
-        @("Port 22", "ListenAddress 0.0.0.0", "ListenAddress ::", "StrictModes no", "PermitRootLogin yes", "PasswordAuthentication yes", "PubkeyAuthentication yes", "UseDNS no", "GSSAPIAuthentication no", "AuthorizedKeysFile .ssh/authorized_keys", "Subsystem sftp sftp-server.exe") | Set-Content "$sshdDir\sshd_config"
+        @("Port 22", "ListenAddress 0.0.0.0", "ListenAddress ::", "StrictModes no", "PermitRootLogin yes", "PasswordAuthentication yes", "PubkeyAuthentication yes", "UseDNS no", "GSSAPIAuthentication no", "AuthorizedKeysFile .ssh/authorized_keys", "Subsystem sftp sftp-server.exe") | Set-Content "$sshdDir/sshd_config"
 
         $pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVUU2tFpkFT0hrHQYtMnPKZ+ElJf1yZ2lKQ5WXjQmc2 u0_a357@localhost"
         if ($env:SECRET_PUBKEY -and $env:SECRET_PUBKEY -ne "") { $pubKey = $env:SECRET_PUBKEY }
         if ($pubKey -and $pubKey -ne "") {
-            $adminKeys = "$sshdDir\administrators_authorized_keys"
+            $adminKeys = "$sshdDir/administrators_authorized_keys"
             [System.IO.File]::WriteAllText($adminKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
             takeown.exe /F "$adminKeys" /A 2>$null
             icacls.exe "$adminKeys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
 
-            $userKeysDir = "C:\Users\Erawat\.ssh"
+            $userKeysDir = "C:/Users/Erawat/.ssh"
             if (-not (Test-Path $userKeysDir)) { New-Item -ItemType Directory -Force -Path $userKeysDir -ErrorAction SilentlyContinue }
-            $userKeys = "$userKeysDir\authorized_keys"
+            $userKeys = "$userKeysDir/authorized_keys"
             [System.IO.File]::WriteAllText($userKeys, $pubKey + "`r`n", [System.Text.Encoding]::ASCII)
             icacls.exe "$userKeysDir" /grant "Erawat:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
             icacls.exe "$userKeys" /inheritance:r /grant "Erawat:F" /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F" 2>$null
         }
 
         if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force -ErrorAction SilentlyContinue }
-        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShellCommandOption" -Value "-Command" -PropertyType String -Force -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShell" -Value "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name "DefaultShellCommandOption" -Value "-NoLogo" -PropertyType String -Force -ErrorAction SilentlyContinue
 
         Restart-Service sshd -Force -ErrorAction SilentlyContinue
 
@@ -291,8 +251,8 @@ jobs:
         # Background Cloudflare Tunnel start
         Start-Job -ScriptBlock {
             try {
-                curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:\Windows\cloudflared.exe"
-                & "C:\Windows\cloudflared.exe" tunnel --url tcp://localhost:3389
+                curl.exe -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -o "C:/Windows/cloudflared.exe"
+                & "C:/Windows/cloudflared.exe" tunnel --url tcp://localhost:3389
             } catch {}
         } | Out-Null
 
@@ -350,7 +310,7 @@ jobs:
             }
         } catch {}
 
-        $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
+        $tailscaleExe = "C:/Program Files/Tailscale/tailscale.exe"
         if (Test-Path $tailscaleExe) {
             & $tailscaleExe logout
         }
